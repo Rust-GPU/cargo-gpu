@@ -59,7 +59,8 @@ use toml::Toml;
 mod build;
 mod install;
 mod show;
-mod spirv;
+mod spirv_cli;
+mod spirv_source;
 mod toml;
 
 fn main() {
@@ -118,13 +119,21 @@ pub(crate) struct Cli {
 }
 
 fn cache_dir() -> std::path::PathBuf {
-    directories::BaseDirs::new()
+    let dir = directories::BaseDirs::new()
         .unwrap_or_else(|| {
             log::error!("could not find the user home directory");
             panic!("cache_dir failed");
         })
         .cache_dir()
-        .join("rust-gpu")
+        .join("rust-gpu");
+
+    if cfg!(test) {
+        let thread_id = std::thread::current().id();
+        let id = format!("{thread_id:?}").replace('(', "-").replace(')', "");
+        dir.join("tests").join(id)
+    } else {
+        dir
+    }
 }
 
 /// Location of the target spec metadata files
@@ -171,55 +180,33 @@ fn write_help(buffer: &mut impl std::io::Write, cmd: &mut clap::Command, _depth:
     }
 }
 
+/// Returns a string suitable to use as a directory.
+///
+/// Created from the spirv-builder source dep and the rustc channel.
+fn to_dirname(text: &str) -> String {
+    text.replace(
+        [std::path::MAIN_SEPARATOR, '\\', '/', '.', ':', '@', '='],
+        "_",
+    )
+    .split(['{', '}', ' ', '\n', '"', '\''])
+    .collect::<Vec<_>>()
+    .concat()
+}
+
 #[cfg(test)]
 mod test {
-    use spirv::Spirv;
+    use crate::cache_dir;
 
-    use super::*;
-
-    #[test]
-    fn cached_checkout_dir_sanity() {
-        // Test that
-        let spirv = Spirv::default();
-        let dir = spirv.cached_checkout_path();
-        let name = dir
-            .file_name()
-            .unwrap()
-            .to_str()
-            .map(std::string::ToString::to_string)
-            .unwrap();
-        assert_eq!(
-            "git_https___github_com_Rust-GPU_rust-gpu_git+nightly-2024-04-24",
-            &name
-        );
+    pub fn shader_crate_template_path() -> std::path::PathBuf {
+        let project_base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        project_base.join("../shader-crate-template")
     }
 
-    #[test]
-    fn builder_from_params() {
-        let shader_crate = std::path::PathBuf::from("../shader-crate-template");
-        let output_dir = std::path::PathBuf::from("../shader-crate-template/shaders");
-        let args = [
-            "target/debug/cargo-gpu",
-            "build",
-            "--shader-crate",
-            &format!("{}", shader_crate.display()),
-            "--output-dir",
-            &format!("{}", output_dir.display()),
-        ];
-        if let Cli {
-            command: Command::Build(mut build),
-        } = Cli::parse_from(args)
-        {
-            assert_eq!(shader_crate, build.shader_crate);
-            assert_eq!(output_dir, build.output_dir);
-
-            // TODO:
-            // What's the best way to reset caches for this? For example we could add a
-            // `--force-spirv-cli-rebuild`, but that would slow down each test. But without
-            // something like that we might not be getting actual idempotent tests.
-            build.run();
-        } else {
-            panic!("was not a build command");
+    pub fn tests_teardown() {
+        let cache_dir = cache_dir();
+        if !cache_dir.exists() {
+            return;
         }
+        std::fs::remove_dir_all(cache_dir).unwrap();
     }
 }

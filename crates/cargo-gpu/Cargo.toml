@@ -19,6 +19,10 @@ serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 chrono.workspace = true
+http.workspace = true
+
+[dev-dependencies]
+test-log.workspace = true
 
 # Enable incremental by default in release mode.
 [profile.release]

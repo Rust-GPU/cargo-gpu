@@ -1,7 +1,7 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
 use std::io::Write as _;
 
-use crate::{cache_dir, spirv::Spirv, target_spec_dir};
+use crate::{cache_dir, spirv_cli::SpirvCli, spirv_source::SpirvSource, target_spec_dir};
 
 /// These are the files needed to create the dedicated, per-shader `rust-gpu` builder create.
 const SPIRV_BUILDER_FILES: &[(&str, &str)] = &[
@@ -86,15 +86,32 @@ const TARGET_SPECS: &[(&str, &str)] = &[
 /// `cargo gpu install`
 #[derive(clap::Parser, Debug)]
 pub struct Install {
-    /// spirv-builder dependency, written just like in a Cargo.toml file.
-    #[clap(long, default_value = Spirv::DEFAULT_DEP)]
-    spirv_builder: String,
+    /// Directory containing the shader crate to compile.
+    #[clap(long, default_value = "./")]
+    pub shader_crate: std::path::PathBuf,
+
+    #[expect(
+        clippy::doc_markdown,
+        reason = "The URL should appear literally like this. But Clippy wants it to be a in markdown clickable link"
+    )]
+    /// Source of `spirv-builder` dependency
+    /// Eg: "https://github.com/Rust-GPU/rust-gpu"
+    #[clap(long)]
+    spirv_builder_source: Option<String>,
+
+    /// Version of `spirv-builder` dependency.
+    /// * If `--spirv-builder-source` is not set, then this is assumed to be a crates.io semantic
+    ///   version such as "0.9.0".
+    /// * If `--spirv-builder-source` is set, then this is assumed to be a Git "commitsh", such
+    ///   as a Git commit hash or a Git tag, therefore anything that `git checkout` can resolve.
+    #[clap(long, verbatim_doc_comment)]
+    spirv_builder_version: Option<String>,
 
     /// Rust toolchain channel to use to build `spirv-builder`.
     ///
     /// This must be compatible with the `spirv_builder` argument as defined in the `rust-gpu` repo.
-    #[clap(long, default_value = Spirv::DEFAULT_CHANNEL)]
-    rust_toolchain: String,
+    #[clap(long)]
+    rust_toolchain: Option<String>,
 
     /// Force `spirv-builder-cli` and `rustc_codegen_spirv` to be rebuilt.
     #[clap(long)]
@@ -102,28 +119,59 @@ pub struct Install {
 }
 
 impl Install {
-    /// Returns a [`Spirv`] instance, responsible for ensuring the right version of the `spirv-builder-cli` crate.
-    fn spirv_cli(&self) -> Spirv {
-        Spirv {
-            dep: self.spirv_builder.clone(),
-            channel: self.rust_toolchain.clone(),
-        }
+    /// Returns a [`SpirvCLI`] instance, responsible for ensuring the right version of the `spirv-builder-cli` crate.
+    fn spirv_cli(&self, shader_crate_path: &std::path::PathBuf) -> SpirvCli {
+        SpirvCli::new(
+            shader_crate_path,
+            self.spirv_builder_source.clone(),
+            self.spirv_builder_version.clone(),
+            self.rust_toolchain.clone(),
+        )
     }
 
     /// Create the `spirv-builder-cli` crate.
     fn write_source_files(&self) {
-        let cli = self.spirv_cli();
-        let checkout = cli.cached_checkout_path();
+        let spirv_cli = self.spirv_cli(&self.shader_crate);
+        let checkout = spirv_cli.cached_checkout_path();
         std::fs::create_dir_all(checkout.join("src")).unwrap();
         for (filename, contents) in SPIRV_BUILDER_FILES {
             log::debug!("writing {filename}");
             let path = checkout.join(filename);
             let mut file = std::fs::File::create(&path).unwrap();
-            let replaced_contents = contents
-                .replace("${SPIRV_BUILDER_SOURCE}", &cli.dep)
-                .replace("${CHANNEL}", &cli.channel);
+            let mut replaced_contents = contents.replace("${CHANNEL}", &spirv_cli.channel);
+            if filename == &"Cargo.toml" {
+                replaced_contents = Self::update_cargo_toml(&replaced_contents, &spirv_cli.source);
+            }
             file.write_all(replaced_contents.as_bytes()).unwrap();
         }
+    }
+
+    /// Create the `spirv-builder-cli` crate.
+    fn update_cargo_toml(contents: &str, spirv_source: &SpirvSource) -> String {
+        let updated = contents.lines().map(|line| {
+            if line.contains("${AUTO-REPLACE-SOURCE}") {
+                let replaced_line = match spirv_source {
+                    SpirvSource::CratesIO(_) => String::new(),
+                    SpirvSource::Git((repo, _)) => format!("git = \"{repo}\""),
+                    SpirvSource::Path((path, _)) => format!("path = \"{path}\""),
+                };
+                return format!("{replaced_line}\n");
+            }
+
+            if line.contains("${AUTO-REPLACE-VERSION}") {
+                let replaced_line = match spirv_source {
+                    SpirvSource::CratesIO(version) | SpirvSource::Path((_, version)) => {
+                        format!("version = \"{}\"", version.replace('v', ""))
+                    }
+                    SpirvSource::Git((_, revision)) => format!("rev = \"{revision}\""),
+                };
+                return format!("{replaced_line}\n");
+            }
+
+            format!("{line}\n")
+        });
+
+        updated.collect()
     }
 
     /// Add the target spec files to the crate.
@@ -150,8 +198,7 @@ impl Install {
             panic!("could not create cache dir");
         });
 
-        let spirv_version = self.spirv_cli();
-        spirv_version.ensure_version_channel_compatibility();
+        let spirv_version = self.spirv_cli(&self.shader_crate);
         spirv_version.ensure_toolchain_and_components_exist();
 
         let checkout = spirv_version.cached_checkout_path();
@@ -191,7 +238,7 @@ impl Install {
 
             command.args([
                 "--features",
-                &Self::get_required_spirv_builder_version(&spirv_version.channel),
+                &Self::get_required_spirv_builder_version(spirv_version.date),
             ]);
 
             log::debug!("building artifacts with `{:?}`", command);
@@ -237,16 +284,13 @@ impl Install {
     /// here we choose the right Cargo feature to enable/disable code in `spirv-builder-cli`.
     ///
     /// TODO:
-    ///   * Download the actual `rust-gpu` repo as pinned in the shader's `Cargo.lock` and get the
-    ///     `spirv-builder` version from there.
     ///   * Warn the user that certain `cargo-gpu` features aren't available when building with
     ///     older versions of `spirv-builder`, eg setting the target spec.
-    fn get_required_spirv_builder_version(toolchain_channel: &str) -> String {
+    fn get_required_spirv_builder_version(date: chrono::NaiveDate) -> String {
         let parse_date = chrono::NaiveDate::parse_from_str;
-        let datetime = parse_date(toolchain_channel, "nightly-%Y-%m-%d").unwrap();
         let pre_cli_date = parse_date("2024-04-24", "%Y-%m-%d").unwrap();
 
-        if datetime < pre_cli_date {
+        if date < pre_cli_date {
             "spirv-builder-pre-cli"
         } else {
             "spirv-builder-0_10"

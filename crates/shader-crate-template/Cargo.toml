@@ -8,14 +8,15 @@ crate-type = ["rlib", "cdylib"]
 
 # Dependencies for CPU and GPU code
 [dependencies]
-spirv-std = { version = "0.9" }
+# "v0.9" doesn't seem to compile on windows?
+spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "82a0f69" }
 
-# dependencies for GPU code
+# Dependencies for GPU code
 [target.'cfg(target_arch = "spirv")'.dependencies]
 glam = { version = "0.29", default-features = false, features = ["libm"] }
 
 
-# dependencies for CPU code
+# Dependencies for CPU code
 [target.'cfg(not(target_arch = "spirv"))'.dependencies]
 glam = { version = "0.29", features = ["std"] }
 

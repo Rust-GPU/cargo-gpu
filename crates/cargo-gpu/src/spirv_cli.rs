@@ -1,64 +1,70 @@
-//! Install the relevant Rust compiler and toolchain components required by the version of
-//! `rust-gpu` defined in the shader.
-use crate::cache_dir;
+//! Query the shader crate to find what version of `rust-gpu` it depends on.
+//! Then ensure that the relevant Rust toolchain and components are installed.
 
-/// The canonical pairs of `rust-gpu` version to `rust-gpu` Rust toolchain channel.
-///
-/// TODO: We may be able to automate this by checking out the locked version of `spirv-std` in the
-/// shader's crate.
-const SPIRV_STD_TOOLCHAIN_PAIRS: &[(&str, &str)] = &[("0.10", "nightly-2024-04-24")];
+use crate::spirv_source::SpirvSource;
 
 /// Cargo dependency for `spirv-builder` and the rust toolchain channel.
 #[derive(Debug, Clone)]
-pub struct Spirv {
-    /// The version of `rust-gpu`, eg `"0.10"` or `"{ git = "https://github.com/Rust-GPU/rust-gpu.git" }`
-    pub dep: String,
-    //// The toolchain that `rust-gpu` uses, eg "nightly-2024-04-24"
+pub struct SpirvCli {
+    #[expect(
+        clippy::doc_markdown,
+        reason = "The URL should appear literally like this. But Clippy wants it to be a in markdown clickable link"
+    )]
+    /// The source and version of `rust-gpu`.
+    /// Eg:
+    ///   * From crates.io with version "0.10.0"
+    ///   * From Git with:
+    ///     - a repo of "https://github.com/Rust-GPU/rust-gpu.git"
+    ///     - a revision of "abc213"
+    pub source: SpirvSource,
+    /// The toolchain channel that `rust-gpu` uses, eg "nightly-2024-04-24"
     pub channel: String,
+    /// The date of the pinned version of `rust-gpu`
+    pub date: chrono::NaiveDate,
 }
 
-impl Default for Spirv {
-    fn default() -> Self {
-        Self {
-            dep: Self::DEFAULT_DEP.into(),
-            channel: Self::DEFAULT_CHANNEL.into(),
-        }
-    }
-}
-
-impl core::fmt::Display for Spirv {
+impl core::fmt::Display for SpirvCli {
     #[expect(
         clippy::min_ident_chars,
         reason = "It's a core library trait implementation"
     )]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        format!("{}+{}", self.dep, self.channel).fmt(f)
+        format!("{}+{}", self.source, self.channel).fmt(f)
     }
 }
 
-impl Spirv {
-    /// The default `rust-gpu` dependency defintion
-    pub const DEFAULT_DEP: &str = r#"{ git = "https://github.com/Rust-GPU/rust-gpu.git" }"#;
-    /// The default `rust-gpu` toolchain
-    pub const DEFAULT_CHANNEL: &str = "nightly-2024-04-24";
+impl SpirvCli {
+    /// Create instance
+    pub fn new(
+        shader_crate_path: &std::path::PathBuf,
+        maybe_rust_gpu_source: Option<String>,
+        maybe_rust_gpu_version: Option<String>,
+        maybe_rust_gpu_channel: Option<String>,
+    ) -> Self {
+        let (default_rust_gpu_source, rust_gpu_date, default_rust_gpu_channel) =
+            SpirvSource::get_rust_gpu_deps_from_shader(shader_crate_path);
 
-    /// Returns a string suitable to use as a directory.
-    ///
-    /// Created from the spirv-builder source dep and the rustc channel.
-    fn to_dirname(&self) -> String {
-        self.to_string()
-            .replace(
-                [std::path::MAIN_SEPARATOR, '\\', '/', '.', ':', '@', '='],
-                "_",
-            )
-            .split(['{', '}', ' ', '\n', '"', '\''])
-            .collect::<Vec<_>>()
-            .concat()
+        let mut maybe_spirv_source: Option<SpirvSource> = None;
+        if let Some(rust_gpu_version) = maybe_rust_gpu_version {
+            let mut source = SpirvSource::CratesIO(rust_gpu_version.clone());
+            if let Some(rust_gpu_source) = maybe_rust_gpu_source {
+                source = SpirvSource::Git((rust_gpu_source, rust_gpu_version));
+            }
+            maybe_spirv_source = Some(source);
+        }
+
+        Self {
+            source: maybe_spirv_source.unwrap_or(default_rust_gpu_source),
+            channel: maybe_rust_gpu_channel.unwrap_or(default_rust_gpu_channel),
+            date: rust_gpu_date,
+        }
     }
 
     /// Create and/or return the cache directory
     pub fn cached_checkout_path(&self) -> std::path::PathBuf {
-        let checkout_dir = cache_dir().join(self.to_dirname());
+        let checkout_dir = crate::cache_dir()
+            .join("spirv-builder-cli")
+            .join(crate::to_dirname(self.to_string().as_ref()));
         std::fs::create_dir_all(&checkout_dir).unwrap_or_else(|error| {
             log::error!(
                 "could not create checkout dir '{}': {error}",
@@ -68,20 +74,6 @@ impl Spirv {
         });
 
         checkout_dir
-    }
-
-    /// Ensure that the requested `rust-gpu` version/toolchain are known to be canonically
-    /// compatible.
-    ///
-    /// TODO: We may be able to automatically get the pair by downloading the `rust-gpu` repo as defined by the
-    /// `spriv-std` dependency in the shader.
-    pub fn ensure_version_channel_compatibility(&self) {
-        for (version, channel) in SPIRV_STD_TOOLCHAIN_PAIRS {
-            assert!(
-                !(version.starts_with(&self.dep) && channel != &self.channel),
-                "expected spirv-std version to be matched with rust toolchain channel {channel}"
-            );
-        }
     }
 
     /// Use `rustup` to install the toolchain and components, if not already installed.
@@ -156,5 +148,27 @@ impl Spirv {
                 "could not install required components"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test_log::test]
+    fn cached_checkout_dir_sanity() {
+        let shader_template_path = crate::test::shader_crate_template_path();
+        let spirv = SpirvCli::new(&shader_template_path, None, None, None);
+        let dir = spirv.cached_checkout_path();
+        let name = dir
+            .file_name()
+            .unwrap()
+            .to_str()
+            .map(std::string::ToString::to_string)
+            .unwrap();
+        assert_eq!(
+            "https___github_com_Rust-GPU_rust-gpu+82a0f69+nightly-2024-04-24",
+            &name
+        );
     }
 }

@@ -13,8 +13,12 @@ env:
 jobs:
   install-and-build-shaders:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -24,18 +28,15 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: moonrepo/setup-rust@v1
-      - run: rustup default stable
-      - run: rustup update
+      - name: Install Rust toolchain
+        run: |
+          rustup default stable
+          rustup update
       - run: cargo test
-      - run: cargo install --path crates/cargo-gpu
-      - run: cargo gpu install
-      - run: cargo gpu build --shader-crate crates/shader-crate-template --output-dir test-shaders
-      - run: ls -lah test-shaders
-      - run: cat test-shaders/manifest.json
 
   clippy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: moonrepo/setup-rust@v1
-      - run: cargo clippy
+      - run: cargo clippy -- --deny warnings

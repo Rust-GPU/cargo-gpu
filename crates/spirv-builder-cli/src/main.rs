@@ -90,6 +90,7 @@ fn main() {
             }
         }
 
+        log::debug!("Calling `rust-gpu`'s `spirv-builder` library");
         builder.build().unwrap()
     };
 
