@@ -37,25 +37,9 @@ pub struct Toml {
 impl Toml {
     /// Entrypoint
     pub fn run(&self) {
-        // Find the path to the toml file to use
-        let path = if self.path.is_file() && self.path.ends_with(".toml") {
-            self.path.clone()
-        } else {
-            let path = self.path.join("Cargo.toml");
-            if path.is_file() {
-                path
-            } else {
-                log::error!("toml file '{}' is not a file", self.path.display());
-                panic!("toml file '{}' is not a file", self.path.display());
-            }
-        };
-
-        log::info!("using toml file '{}'", path.display());
+        let (path, toml) = Self::parse_cargo_toml(self.path.clone());
 
         // Determine if this is a workspace's Cargo.toml or a crate's Cargo.toml
-        let contents = std::fs::read_to_string(&path).unwrap();
-        let toml: toml::Table = toml::from_str(&contents).unwrap();
-
         let (toml_type, table) = if toml.contains_key("workspace") {
             let table = Self::get_metadata_rustgpu_table(&toml, "workspace")
                 .unwrap_or_else(|| {
@@ -132,6 +116,29 @@ impl Toml {
             log::error!("parameters found in [{toml_type}.metadata.rust-gpu.build] were not parameters to `cargo gpu build`");
             panic!("could not determin build command");
         }
+    }
+
+    /// Parse the contents of the shader's `Cargo.toml`
+    pub fn parse_cargo_toml(mut path: std::path::PathBuf) -> (std::path::PathBuf, toml::Table) {
+        // Find the path to the toml file to use
+        let parsed_path = if path.is_file() && path.ends_with(".toml") {
+            path
+        } else {
+            path = path.join("Cargo.toml");
+            if path.is_file() {
+                path
+            } else {
+                log::error!("toml file '{}' is not a file", path.display());
+                panic!("toml file '{}' is not a file", path.display());
+            }
+        };
+
+        log::info!("using toml file '{}'", parsed_path.display());
+
+        let contents = std::fs::read_to_string(&parsed_path).unwrap();
+        let toml: toml::Table = toml::from_str(&contents).unwrap();
+
+        (parsed_path, toml)
     }
 
     /// Parse the `[package.metadata.rust-gpu]` section.
