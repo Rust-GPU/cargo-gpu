@@ -83,11 +83,11 @@ fn main() {
         }
         Command::Build(mut build) => {
             log::debug!("building with arguments: {build:#?}");
-            build.run()
+            build.run();
         }
         Command::Toml(toml) => {
             log::debug!("building by toml file with arguments: {toml:#?}");
-            toml.run()
+            toml.run();
         }
         Command::Show(show) => show.run(),
         Command::DumpUsage => dump_full_usage_for_readme(),
