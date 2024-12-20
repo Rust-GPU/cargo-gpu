@@ -248,7 +248,14 @@ impl Install {
                 .stderr(std::process::Stdio::inherit())
                 .output()
                 .unwrap();
-            assert!(output.status.success(), "...build error!");
+            if !output.status.success() {
+                log::error!(
+                    "build error:\nstd_out: {}\nstd_err: {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                panic!("aborting because the build command returned an error");
+            }
 
             if dylib_path.is_file() {
                 log::info!("successfully built {}", dylib_path.display());
