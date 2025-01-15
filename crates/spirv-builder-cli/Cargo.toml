@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.4.8", features = ["derive"] }
+# `clap = "=4.4.8"` pin is needed to support older Rust toolchains.
+# If `clap` gets too old, then it can be split into 2 versions, gated by a feature, like `spirv` is.
+# Or more generally we should think about how to deprecate supporting old version of `rust-gpu`.
+clap = { version = "=4.4.8", features = ["derive"] }
 env_home = "0.1.0"
 env_logger = "0.10"
 log = "0.4"

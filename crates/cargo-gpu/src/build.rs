@@ -20,8 +20,8 @@ pub struct Build {
 
 impl Build {
     /// Entrypoint
-    pub fn run(&mut self) -> anyhow::Result<()> {
-        let spirv_builder_cli_path = self.install.run()?;
+    pub fn run(&mut self) -> anyhow::Result<Vec<std::path::PathBuf>> {
+        let (spirv_builder_cli_path, cargo_lock_files_to_revert) = self.install.run()?;
 
         // Ensure the shader output dir exists
         log::debug!(
@@ -137,7 +137,7 @@ impl Build {
             std::fs::remove_file(spirv_manifest)?;
         }
 
-        Ok(())
+        Ok(cargo_lock_files_to_revert)
     }
 }
 

@@ -134,7 +134,8 @@ fn run() -> anyhow::Result<()> {
                 "installing with final merged arguments: {:#?}",
                 command.install
             );
-            let _: std::path::PathBuf = command.install.run()?;
+            let (_, cargo_lock_files_to_revert) = command.install.run()?;
+            spirv_cli::SpirvCli::revert_cargo_lock_manifest_versions(cargo_lock_files_to_revert)?;
         }
         Command::Build(build) => {
             let shader_crate_path = build.install.spirv_install.shader_crate;
@@ -142,15 +143,17 @@ fn run() -> anyhow::Result<()> {
                 config::Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
             log::debug!("building with final merged arguments: {command:#?}");
 
-            if command.build_args.watch {
+            let cargo_lock_files_to_revert = if command.build_args.watch {
                 //  When watching, do one normal run to setup the `manifest.json` file.
                 command.build_args.watch = false;
                 command.run()?;
                 command.build_args.watch = true;
-                command.run()?;
+                command.run()?
             } else {
-                command.run()?;
-            }
+                command.run()?
+            };
+
+            spirv_cli::SpirvCli::revert_cargo_lock_manifest_versions(cargo_lock_files_to_revert)?;
         }
         Command::Show(show) => show.run()?,
         Command::DumpUsage => dump_full_usage_for_readme()?,
@@ -274,6 +277,23 @@ mod test {
     use crate::cache_dir;
     use std::io::Write as _;
 
+    fn copy_dir_all(
+        src: impl AsRef<std::path::Path>,
+        dst: impl AsRef<std::path::Path>,
+    ) -> anyhow::Result<()> {
+        std::fs::create_dir_all(&dst)?;
+        for maybe_entry in std::fs::read_dir(src)? {
+            let entry = maybe_entry?;
+            let ty = entry.file_type()?;
+            if ty.is_dir() {
+                copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            } else {
+                std::fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn shader_crate_template_path() -> std::path::PathBuf {
         let project_base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         project_base.join("../shader-crate-template")
@@ -303,22 +323,5 @@ mod test {
             return;
         }
         std::fs::remove_dir_all(cache_dir).unwrap();
-    }
-
-    pub fn copy_dir_all(
-        src: impl AsRef<std::path::Path>,
-        dst: impl AsRef<std::path::Path>,
-    ) -> anyhow::Result<()> {
-        std::fs::create_dir_all(&dst)?;
-        for maybe_entry in std::fs::read_dir(src)? {
-            let entry = maybe_entry?;
-            let ty = entry.file_type()?;
-            if ty.is_dir() {
-                copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
-            } else {
-                std::fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
-            }
-        }
-        Ok(())
     }
 }
