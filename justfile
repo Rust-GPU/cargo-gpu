@@ -1,6 +1,6 @@
 [group: 'ci']
-build-shader-template:
-  scripts/build_shader_template.sh
+build-shader-template rust-gpu-version="latest":
+  scripts/build_shader_template.sh {{rust-gpu-version}}
 
 [group: 'ci']
 setup-lints:
