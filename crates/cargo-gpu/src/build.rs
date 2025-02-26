@@ -121,7 +121,13 @@ impl Build {
             .collect::<anyhow::Result<Vec<Linkage>>>()?;
 
         // Write the shader manifest json file
-        let manifest_path = self.build_args.output_dir.join("manifest.json");
+        let manifest_name = self
+            .build_args
+            .manifest_file
+            .as_ref()
+            .map(|mf| mf.as_str())
+            .unwrap_or("manifest.json");
+        let manifest_path = self.build_args.output_dir.join(manifest_name);
         // Sort the contents so the output is deterministic
         linkage.sort();
         let json = serde_json::to_string_pretty(&linkage)?;
