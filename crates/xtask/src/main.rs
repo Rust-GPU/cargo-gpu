@@ -122,6 +122,7 @@ fn main() {
             .unwrap();
 
             cmd(["ls", "-lah", dir.path().to_str().unwrap()]).unwrap();
+            //NOTE: manifest.json is the default value here, which should be valid
             cmd(["cat", dir.path().join("manifest.json").to_str().unwrap()]).unwrap();
         }
     }

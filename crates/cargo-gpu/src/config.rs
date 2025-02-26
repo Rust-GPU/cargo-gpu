@@ -241,4 +241,21 @@ mod test {
             ]
         );
     }
+
+    #[test_log::test]
+    fn rename_manifest_parse() {
+        let shader_crate_path = crate::test::shader_crate_test_path();
+
+        let args = Config::clap_command_with_cargo_config(
+            &shader_crate_path,
+            vec![
+                "gpu".to_owned(),
+                "build".to_owned(),
+                "--manifest-file".to_owned(),
+                "mymanifest".to_owned(),
+            ],
+        )
+        .unwrap();
+        assert_eq!(args.build_args.manifest_file, Some("mymanifest".to_owned()));
+    }
 }

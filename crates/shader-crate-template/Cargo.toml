@@ -2,7 +2,7 @@
 name = "rust-gpu-shader-crate-template"
 version = "0.1.0"
 edition = "2021"
- 
+
 [lib]
 crate-type = ["rlib", "cdylib"]
 
@@ -25,7 +25,7 @@ glam = { version = "0.29", features = ["std"] }
 output-dir = "./"
 # Set shader crate's cargo default-features
 no_default_features = false
-# Set shader crate's cargo features.  
+# Set shader crate's cargo features.
 features = []
 # The compile target.
 # TODO: `cargo gpu show targets` for all available options.
@@ -51,7 +51,7 @@ spirv-metadata = "None"
 relax-struct-store = false
 # Allow allocating an object of a pointer type and returning a pointer value from a function
 # in logical addressing mode.
-relax-logical-pointer =  false
+relax-logical-pointer = false
 # Enable VK_KHR_relaxed_block_layout when checking standard uniform, storage buffer, and push
 # constant layouts.
 # This is the default when targeting Vulkan 1.1 or later.
@@ -68,6 +68,9 @@ scalar-block-layout = false
 skip-block-layout = false
 # Preserve unused descriptor bindings. Useful for reflection.
 preserve-bindings = false
+# Renames the manifest.json file to the given string. Useful if you collect all your SPIR-V fragments
+# in one place.
+#manifest-file = "mymanifest.json"
 
 [package.metadata.rust-gpu.install]
 # Source of `spirv-builder` dependency
