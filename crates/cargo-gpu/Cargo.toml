@@ -23,6 +23,7 @@ toml.workspace = true
 chrono.workspace = true
 http.workspace = true
 crossterm.workspace = true
+version_check = "0.9.5"
 
 [dev-dependencies]
 test-log.workspace = true

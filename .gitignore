@@ -20,3 +20,8 @@ flamegraph.svg
 
 # Compiled shader assets from running tests
 crates/shader-crate-template/shaders
+
+# Build artefacts used by CI tests
+tmp/*
+crates/shader-crate-template/manifest.json
+crates/shader-crate-template/rust_gpu_shader_crate_template.spv

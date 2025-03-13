@@ -22,7 +22,7 @@ pub struct Build {
 
 impl Build {
     /// Entrypoint
-    #[expect(clippy::too_many_lines, reason = "these lines are fine")]
+    #[expect(clippy::too_many_lines, reason = "It's not too confusing")]
     pub fn run(&mut self) -> anyhow::Result<()> {
         let spirv_builder_cli_path = self.install.run()?;
 
@@ -150,7 +150,6 @@ impl Build {
             );
             std::fs::remove_file(spirv_manifest)?;
         }
-
         Ok(())
     }
 }

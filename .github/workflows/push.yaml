@@ -19,6 +19,23 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
+        rust-gpu-version: [latest]
+        include:
+          # As well as testing on each OS, we also want to test to make sure we're still supporting
+          # older versions of `rust-gpu`. However, we can assume that these tests are already okay
+          # across platforms, so we only need to test on Linux, the chepeast in terms of minutes.
+          #
+          # `0.7.0` currently fails building `spirv-builder-cli` with:
+          #    """
+          #    package `is_terminal_polyfill v1.70.1` cannot be built because it requires rustc 
+          #    1.70.0 or newer, while the currently active rustc version is 1.69.0-nightly
+          #    """
+          # It's probably easily fixable. But also `0.7.0` was released in April 2023, so there's
+          # unlikely many users of it?
+          - os: ubuntu-latest
+            rust-gpu-version: 0.8.0
+          - os: ubuntu-latest
+            rust-gpu-version: 0.9.0
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -35,9 +52,8 @@ jobs:
           rustup update
       - run: cargo test
       - name: Run a full build
-        run: cargo xtask test-build
+        run: cargo xtask test-build --rust-gpu-version ${{ matrix.rust-gpu-version }}
           
-
   lints:
     runs-on: ubuntu-latest
     steps:

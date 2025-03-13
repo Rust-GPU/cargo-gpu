@@ -104,13 +104,14 @@ pub struct Install {
 
 impl Install {
     /// Returns a [`SpirvCLI`] instance, responsible for ensuring the right version of the `spirv-builder-cli` crate.
-    fn spirv_cli(&self, shader_crate_path: &std::path::PathBuf) -> anyhow::Result<SpirvCli> {
+    fn spirv_cli(&self, shader_crate_path: &std::path::Path) -> anyhow::Result<SpirvCli> {
         SpirvCli::new(
             shader_crate_path,
             self.spirv_install.spirv_builder_source.clone(),
             self.spirv_install.spirv_builder_version.clone(),
             self.spirv_install.rust_toolchain.clone(),
             self.spirv_install.auto_install_rust_toolchain,
+            self.spirv_install.force_overwrite_lockfiles_v4_to_v3,
         )
     }
 

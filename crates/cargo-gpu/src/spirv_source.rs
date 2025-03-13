@@ -50,18 +50,20 @@ impl core::fmt::Display for SpirvSource {
 
 impl SpirvSource {
     /// Look into the shader crate to get the version of `rust-gpu` it's using.
-    pub fn get_rust_gpu_deps_from_shader(
-        shader_crate_path: &std::path::PathBuf,
+    pub fn get_rust_gpu_deps_from_shader<F: AsRef<std::path::Path>>(
+        shader_crate_path: F,
     ) -> anyhow::Result<(Self, chrono::NaiveDate, String)> {
-        let rust_gpu_source = Self::get_spirv_std_dep_definition(shader_crate_path)?;
-
+        let rust_gpu_source = Self::get_spirv_std_dep_definition(shader_crate_path.as_ref())?;
         rust_gpu_source.ensure_repo_is_installed()?;
         rust_gpu_source.checkout()?;
 
         let date = rust_gpu_source.get_version_date()?;
         let channel = Self::get_channel_from_toolchain_toml(&rust_gpu_source.to_dirname()?)?;
 
-        log::debug!("Parsed version, date and toolchain channel from shader-defined `rust-gpu`: {rust_gpu_source:?}, {date}, {channel}");
+        log::debug!(
+            "Parsed version, date and toolchain channel from shader-defined `rust-gpu`: \
+            {rust_gpu_source:?}, {date}, {channel}"
+        );
 
         Ok((rust_gpu_source, date, channel))
     }
@@ -89,6 +91,30 @@ impl SpirvSource {
     fn to_dirname(&self) -> anyhow::Result<std::path::PathBuf> {
         let dir = crate::to_dirname(self.to_string().as_ref());
         Ok(crate::cache_dir()?.join("rust-gpu-repo").join(dir))
+    }
+
+    /// Make sure shader crate path is absolute and canonical.
+    fn shader_crate_path_canonical(
+        shader_crate_path: &mut std::path::PathBuf,
+    ) -> anyhow::Result<()> {
+        let cwd = std::env::current_dir().context("no cwd")?;
+        let mut canonical_path = shader_crate_path.clone();
+
+        if !canonical_path.is_absolute() {
+            canonical_path = cwd.join(canonical_path);
+        }
+        canonical_path
+            .canonicalize()
+            .context("could not get absolute path to shader crate")?;
+
+        if !canonical_path.is_dir() {
+            log::error!("{shader_crate_path:?} is not a directory, aborting");
+            anyhow::bail!("{shader_crate_path:?} is not a directory");
+        };
+
+        *shader_crate_path = canonical_path;
+
+        Ok(())
     }
 
     /// Checkout the `rust-gpu` repo to the requested version.
@@ -171,31 +197,27 @@ impl SpirvSource {
         Ok(channel.to_string().replace('"', ""))
     }
 
-    /// Get the shader crate's `spirv_std = ...` definition in its `Cargo.toml`
+    /// Get the shader crate's resolved `spirv_std = ...` definition in its `Cargo.toml`/`Cargo.lock`
     pub fn get_spirv_std_dep_definition(
-        shader_crate_path: &std::path::PathBuf,
+        shader_crate_path: &std::path::Path,
     ) -> anyhow::Result<Self> {
-        let cwd = std::env::current_dir().context("no cwd")?;
-        let exec_path = if shader_crate_path.is_absolute() {
-            shader_crate_path.clone()
-        } else {
-            cwd.join(shader_crate_path)
-        }
-        .canonicalize()
-        .context("could not get absolute path to shader crate")?;
-        if !exec_path.is_dir() {
-            log::error!("{exec_path:?} is not a directory, aborting");
-            anyhow::bail!("{exec_path:?} is not a directory");
-        }
+        let canonical_shader_path = shader_crate_path.to_path_buf();
+        Self::shader_crate_path_canonical(&mut canonical_shader_path.clone())?;
 
-        log::debug!("Running `cargo tree` on {}", exec_path.display());
+        log::debug!(
+            "Running `cargo tree` on {}",
+            canonical_shader_path.display()
+        );
         let output_cargo_tree = std::process::Command::new("cargo")
-            .current_dir(&exec_path)
+            .current_dir(canonical_shader_path.clone())
             .args(["tree", "--workspace", "--prefix", "none"])
             .output()?;
         anyhow::ensure!(
             output_cargo_tree.status.success(),
-            "could not query shader's `Cargo.toml` for `spirv-std` dependency"
+            format!(
+                "could not query shader's `Cargo.toml` for `spirv-std` dependency: {}",
+                String::from_utf8(output_cargo_tree.stderr)?
+            )
         );
         let cargo_tree_string = String::from_utf8_lossy(&output_cargo_tree.stdout);
 
@@ -205,7 +227,7 @@ impl SpirvSource {
         log::trace!("  found {maybe_spirv_std_def:?}");
 
         let Some(spirv_std_def) = maybe_spirv_std_def else {
-            anyhow::bail!("`spirv-std` not found in shader's `Cargo.toml` at {exec_path:?}:\n{cargo_tree_string}");
+            anyhow::bail!("`spirv-std` not found in shader's `Cargo.toml` at {canonical_shader_path:?}:\n{cargo_tree_string}");
         };
 
         Self::parse_spirv_std_source_and_version(spirv_std_def)
@@ -239,8 +261,8 @@ impl SpirvSource {
             // So here we'll parse the fragment out of the source string by hand
             let uri = source_string.parse::<http::Uri>()?;
             let maybe_hash = if source_string.contains('#') {
-                let splits = source_string.split('#');
-                splits.last().map(std::borrow::ToOwned::to_owned)
+                let mut splits = source_string.split('#');
+                splits.next_back().map(std::borrow::ToOwned::to_owned)
             } else {
                 None
             };
@@ -322,6 +344,7 @@ impl SpirvSource {
 
         crate::user_output!("Cloning `rust-gpu` repo...\n");
 
+        //  TODO: do something else when testing, to help speed things up.
         let output_clone = std::process::Command::new("git")
             .args([
                 "clone",
