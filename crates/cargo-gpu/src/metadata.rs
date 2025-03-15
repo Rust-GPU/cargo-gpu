@@ -42,10 +42,7 @@ impl Metadata {
     }
 
     /// Merge the various source of config: defaults, workspace and shader crate.
-    fn merge_configs(
-        cargo_json: &serde_json::Value,
-        path: &std::path::Path,
-    ) -> anyhow::Result<serde_json::Value> {
+    fn merge_configs(cargo_json: &serde_json::Value, path: &std::path::Path) -> anyhow::Result<serde_json::Value> {
         let mut metadata = crate::config::Config::defaults_as_json()?;
         crate::config::Config::json_merge(
             &mut metadata,
@@ -68,10 +65,7 @@ impl Metadata {
                     if let Some(output_dir) = output_path.clone().as_str() {
                         let new_output_path = path.join(output_dir);
                         *output_path = Value::String(format!("{}", new_output_path.display()));
-                        log::debug!(
-                            "setting that to be relative to the Cargo.toml it was found in: {}",
-                            new_output_path.display()
-                        );
+                        log::debug!("setting that to be relative to the Cargo.toml it was found in: {}", new_output_path.display());
                     }
                 }
                 crate_meta
@@ -93,17 +87,9 @@ impl Metadata {
 
         log::debug!("Querying Cargo metadata for {cargo_toml_path:?}");
         let output_cargo = std::process::Command::new("cargo")
-            .args([
-                "metadata",
-                "--no-deps",
-                "--manifest-path",
-                cargo_toml_path.display().to_string().as_ref(),
-            ])
+            .args(["metadata", "--no-deps", "--manifest-path", cargo_toml_path.display().to_string().as_ref()])
             .output()?;
-        anyhow::ensure!(
-            output_cargo.status.success(),
-            "could not run `cargo metadata` on {cargo_toml_path:?}"
-        );
+        anyhow::ensure!(output_cargo.status.success(), "could not run `cargo metadata` on {cargo_toml_path:?}");
 
         Ok(serde_json::from_slice(&output_cargo.stdout)?)
     }
@@ -121,16 +107,11 @@ impl Metadata {
     }
 
     /// Get any `rust-gpu` metadata set in the crate's `Cargo.toml`
-    fn get_crate_metadata(
-        json: &serde_json::Value,
-        path: &std::path::Path,
-    ) -> anyhow::Result<serde_json::Value> {
+    fn get_crate_metadata(json: &serde_json::Value, path: &std::path::Path) -> anyhow::Result<serde_json::Value> {
         let empty_json_object = serde_json::json!({});
         if let Some(serde_json::Value::Array(packages)) = json.pointer("/packages") {
             for package in packages {
-                if let Some(serde_json::Value::String(manifest_path_dirty)) =
-                    package.pointer("/manifest_path")
-                {
+                if let Some(serde_json::Value::String(manifest_path_dirty)) = package.pointer("/manifest_path") {
                     let mut shader_crate_path = std::fs::canonicalize(path)?
                         .join("Cargo.toml")
                         .display()
@@ -156,10 +137,7 @@ impl Metadata {
     }
 }
 
-#[expect(
-    clippy::indexing_slicing,
-    reason = "We don't need to be so strict in tests"
-)]
+#[expect(clippy::indexing_slicing, reason = "We don't need to be so strict in tests")]
 #[cfg(test)]
 mod test {
     use super::*;
@@ -169,10 +147,7 @@ mod test {
         let json = serde_json::json!({});
         let configs = Metadata::merge_configs(&json, std::path::Path::new("./")).unwrap();
         assert_eq!(configs["build"]["debug"], serde_json::Value::Bool(false));
-        assert_eq!(
-            configs["install"]["auto_install_rust_toolchain"],
-            serde_json::Value::Bool(false)
-        );
+        assert_eq!(configs["install"]["auto_install_rust_toolchain"], serde_json::Value::Bool(false));
     }
 
     #[test_log::test]
@@ -189,10 +164,7 @@ mod test {
         );
         let configs = Metadata::merge_configs(&json, std::path::Path::new("./")).unwrap();
         assert_eq!(configs["build"]["debug"], serde_json::Value::Bool(true));
-        assert_eq!(
-            configs["install"]["auto_install_rust_toolchain"],
-            serde_json::Value::Bool(true)
-        );
+        assert_eq!(configs["install"]["auto_install_rust_toolchain"], serde_json::Value::Bool(true));
     }
 
     #[test_log::test]
@@ -213,9 +185,6 @@ mod test {
         );
         let configs = Metadata::merge_configs(&json, marker.parent().unwrap()).unwrap();
         assert_eq!(configs["build"]["debug"], serde_json::Value::Bool(true));
-        assert_eq!(
-            configs["install"]["auto_install_rust_toolchain"],
-            serde_json::Value::Bool(true)
-        );
+        assert_eq!(configs["install"]["auto_install_rust_toolchain"], serde_json::Value::Bool(true));
     }
 }

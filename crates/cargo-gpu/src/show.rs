@@ -5,7 +5,7 @@ use crate::cache_dir;
 /// Show the computed source of the spirv-std dependency.
 #[derive(Clone, Debug, clap::Parser)]
 pub struct SpirvSourceDep {
-    /// The location of the shader-crate to inspect to determine its spirv-std dependency.    
+    /// The location of the shader-crate to inspect to determine its spirv-std dependency.
     #[clap(long, default_value = "./")]
     pub shader_crate: std::path::PathBuf,
 }
@@ -46,8 +46,7 @@ impl Show {
                 println!("{}\n", cache_dir()?.display());
             }
             Info::SpirvSource(SpirvSourceDep { shader_crate }) => {
-                let rust_gpu_source =
-                    crate::spirv_source::SpirvSource::get_spirv_std_dep_definition(&shader_crate)?;
+                let rust_gpu_source = crate::spirv_source::SpirvSource::get_spirv_std_dep_definition(&shader_crate)?;
                 {
                     println!("{rust_gpu_source}\n");
                 }
@@ -57,10 +56,7 @@ impl Show {
             }
             Info::Capabilities => {
                 println!("All available options to the `cargo gpu build --capability` argument:");
-                #[expect(
-                    clippy::use_debug,
-                    reason = "It's easier to just use `Debug` formatting than implementing `Display`"
-                )]
+                #[expect(clippy::use_debug, reason = "It's easier to just use `Debug` formatting than implementing `Display`")]
                 for capability in Self::capability_variants_iter() {
                     println!("  {capability:?}");
                 }

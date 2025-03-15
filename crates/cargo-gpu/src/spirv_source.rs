@@ -35,10 +35,7 @@ pub enum SpirvSource {
 }
 
 impl core::fmt::Display for SpirvSource {
-    #[expect(
-        clippy::min_ident_chars,
-        reason = "It's a core library trait implementation"
-    )]
+    #[expect(clippy::min_ident_chars, reason = "It's a core library trait implementation")]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::CratesIO(version) => f.write_str(version),
@@ -50,9 +47,7 @@ impl core::fmt::Display for SpirvSource {
 
 impl SpirvSource {
     /// Look into the shader crate to get the version of `rust-gpu` it's using.
-    pub fn get_rust_gpu_deps_from_shader<F: AsRef<std::path::Path>>(
-        shader_crate_path: F,
-    ) -> anyhow::Result<(Self, chrono::NaiveDate, String)> {
+    pub fn get_rust_gpu_deps_from_shader<F: AsRef<std::path::Path>>(shader_crate_path: F) -> anyhow::Result<(Self, chrono::NaiveDate, String)> {
         let rust_gpu_source = Self::get_spirv_std_dep_definition(shader_crate_path.as_ref())?;
         rust_gpu_source.ensure_repo_is_installed()?;
         rust_gpu_source.checkout()?;
@@ -94,9 +89,7 @@ impl SpirvSource {
     }
 
     /// Make sure shader crate path is absolute and canonical.
-    fn shader_crate_path_canonical(
-        shader_crate_path: &mut std::path::PathBuf,
-    ) -> anyhow::Result<()> {
+    fn shader_crate_path_canonical(shader_crate_path: &mut std::path::PathBuf) -> anyhow::Result<()> {
         let cwd = std::env::current_dir().context("no cwd")?;
         let mut canonical_path = shader_crate_path.clone();
 
@@ -110,7 +103,7 @@ impl SpirvSource {
         if !canonical_path.is_dir() {
             log::error!("{shader_crate_path:?} is not a directory, aborting");
             anyhow::bail!("{shader_crate_path:?} is not a directory");
-        };
+        }
 
         *shader_crate_path = canonical_path;
 
@@ -119,11 +112,7 @@ impl SpirvSource {
 
     /// Checkout the `rust-gpu` repo to the requested version.
     fn checkout(&self) -> anyhow::Result<()> {
-        log::debug!(
-            "Checking out `rust-gpu` repo at {} to {}",
-            self.to_dirname()?.display(),
-            self.to_version()
-        );
+        log::debug!("Checking out `rust-gpu` repo at {} to {}", self.to_dirname()?.display(), self.to_version());
         let output_checkout = std::process::Command::new("git")
             .current_dir(self.to_dirname()?)
             .args(["checkout", self.to_version().as_ref()])
@@ -143,10 +132,7 @@ impl SpirvSource {
     fn get_version_date(&self) -> anyhow::Result<chrono::NaiveDate> {
         let date_format = "%Y-%m-%d";
 
-        log::debug!(
-            "Getting `rust-gpu` version date from {}",
-            self.to_dirname()?.display(),
-        );
+        log::debug!("Getting `rust-gpu` version date from {}", self.to_dirname()?.display(),);
         let output_date = std::process::Command::new("git")
             .current_dir(self.to_dirname()?)
             .args([
@@ -168,15 +154,9 @@ impl SpirvSource {
             .trim()
             .replace('\'', "");
 
-        log::debug!(
-            "Parsed date for version {}: {date_string}",
-            self.to_version()
-        );
+        log::debug!("Parsed date for version {}: {date_string}", self.to_version());
 
-        Ok(chrono::NaiveDate::parse_from_str(
-            &date_string,
-            date_format,
-        )?)
+        Ok(chrono::NaiveDate::parse_from_str(&date_string, date_format)?)
     }
 
     /// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
@@ -186,9 +166,7 @@ impl SpirvSource {
         let contents = std::fs::read_to_string(path.join("rust-toolchain.toml"))?;
         let toml: toml::Table = toml::from_str(&contents)?;
         let Some(toolchain) = toml.get("toolchain") else {
-            anyhow::bail!(
-                "Couldn't find `[toolchain]` section in `rust-toolchain.toml` at {path:?}"
-            );
+            anyhow::bail!("Couldn't find `[toolchain]` section in `rust-toolchain.toml` at {path:?}");
         };
         let Some(channel) = toolchain.get("channel") else {
             anyhow::bail!("Couldn't find `channel` field in `rust-toolchain.toml` at {path:?}");
@@ -198,16 +176,11 @@ impl SpirvSource {
     }
 
     /// Get the shader crate's resolved `spirv_std = ...` definition in its `Cargo.toml`/`Cargo.lock`
-    pub fn get_spirv_std_dep_definition(
-        shader_crate_path: &std::path::Path,
-    ) -> anyhow::Result<Self> {
+    pub fn get_spirv_std_dep_definition(shader_crate_path: &std::path::Path) -> anyhow::Result<Self> {
         let canonical_shader_path = shader_crate_path.to_path_buf();
         Self::shader_crate_path_canonical(&mut canonical_shader_path.clone())?;
 
-        log::debug!(
-            "Running `cargo tree` on {}",
-            canonical_shader_path.display()
-        );
+        log::debug!("Running `cargo tree` on {}", canonical_shader_path.display());
         let output_cargo_tree = std::process::Command::new("cargo")
             .current_dir(canonical_shader_path.clone())
             .args(["tree", "--workspace", "--prefix", "none"])
@@ -279,11 +252,7 @@ impl SpirvSource {
     }
 
     /// Parse a Git source like: `https://github.com/Rust-GPU/rust-gpu?rev=54f6978c#54f6978c`
-    fn parse_git_source(
-        version: String,
-        uri: &http::Uri,
-        fragment: Option<String>,
-    ) -> anyhow::Result<Self> {
+    fn parse_git_source(version: String, uri: &http::Uri, fragment: Option<String>) -> anyhow::Result<Self> {
         log::trace!(
             "parsing git source from version: '{version}' and uri: '{uri}' and fragment: {}",
             fragment.as_deref().unwrap_or("?")
@@ -301,11 +270,7 @@ impl SpirvSource {
     }
 
     /// Decide the Git revision to use.
-    fn parse_git_revision(
-        maybe_query: Option<&str>,
-        maybe_fragment: Option<String>,
-        version: String,
-    ) -> String {
+    fn parse_git_revision(maybe_query: Option<&str>, maybe_fragment: Option<String>, version: String) -> String {
         let marker = "rev=";
         let maybe_sane_query = maybe_query.and_then(|query| {
             // TODO: This might seem a little crude, but it saves adding a whole query parsing dependency.
@@ -346,11 +311,7 @@ impl SpirvSource {
 
         //  TODO: do something else when testing, to help speed things up.
         let output_clone = std::process::Command::new("git")
-            .args([
-                "clone",
-                self.to_repo().as_ref(),
-                self.to_dirname()?.to_string_lossy().as_ref(),
-            ])
+            .args(["clone", self.to_repo().as_ref(), self.to_dirname()?.to_string_lossy().as_ref()])
             .output()?;
 
         anyhow::ensure!(
@@ -384,8 +345,7 @@ mod test {
 
     #[test_log::test]
     fn parsing_spirv_std_dep_for_git_source() {
-        let definition =
-            "spirv-std v9.9.9 (https://github.com/Rust-GPU/rust-gpu?rev=82a0f69#82a0f69) (*)";
+        let definition = "spirv-std v9.9.9 (https://github.com/Rust-GPU/rust-gpu?rev=82a0f69#82a0f69) (*)";
         let source = SpirvSource::parse_spirv_std_source_and_version(definition).unwrap();
         assert_eq!(
             source,
