@@ -347,7 +347,7 @@ impl SpirvCli {
                 &shader_cargo_lock_path,
                 is_force_overwrite_lockfiles_v4_to_v3,
             )
-            .context("handling v3v4 conflict")?;
+            .context("handling v4/v3 conflict")?;
             return Ok(());
         }
         if third_line.contains("version = 3") {
