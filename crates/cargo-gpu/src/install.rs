@@ -1,5 +1,5 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
-//!
+
 use std::io::Write as _;
 
 use anyhow::Context as _;
@@ -179,7 +179,7 @@ impl Install {
                 let mut file = std::fs::File::create(&path)
                     .with_context(|| format!("creating file at [{}]", path.display()))?;
                 file.write_all(contents.as_bytes())
-                    .context("writring to file")?;
+                    .context("writing to file")?;
             }
         }
         Ok(())
@@ -261,8 +261,6 @@ impl Install {
                 .output()
                 .context("getting command output")
                 .and_then(|output| {
-                    log::trace!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
-                    log::trace!("STDERR:\n{}", String::from_utf8_lossy(&output.stderr));
                     if output.status.success() {
                         Ok(output)
                     } else {

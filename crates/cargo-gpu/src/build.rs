@@ -7,6 +7,7 @@ use std::io::Write as _;
 
 use crate::{install::Install, target_spec_dir};
 use spirv_builder_cli::{args::BuildArgs, Linkage, ShaderModule};
+
 /// `cargo build` subcommands
 #[derive(clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Build {
