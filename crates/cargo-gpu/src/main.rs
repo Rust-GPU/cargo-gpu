@@ -50,7 +50,12 @@
 //! conduct other post-processing, like converting the `spv` files into `wgsl` files,
 //! for example.
 
-use {anyhow::Context as _, build::Build, clap::Parser as _, install::Install, show::Show};
+use anyhow::Context as _;
+
+use build::Build;
+use clap::Parser as _;
+use install::Install;
+use show::Show;
 
 mod build;
 mod config;
@@ -266,7 +271,8 @@ fn to_dirname(text: &str) -> String {
 
 #[cfg(test)]
 mod test {
-    use {crate::cache_dir, std::io::Write as _};
+    use crate::cache_dir;
+    use std::io::Write as _;
 
     fn copy_dir_all(
         src: impl AsRef<std::path::Path>,

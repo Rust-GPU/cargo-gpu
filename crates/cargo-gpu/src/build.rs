@@ -2,13 +2,11 @@
 #![allow(clippy::unwrap_used, reason = "this is basically a test")]
 //! `cargo gpu build`, analogous to `cargo build`
 
-use {
-    crate::{install::Install, target_spec_dir},
-    anyhow::Context as _,
-    spirv_builder_cli::{args::BuildArgs, Linkage, ShaderModule},
-    std::io::Write as _,
-};
+use anyhow::Context as _;
+use std::io::Write as _;
 
+use crate::{install::Install, target_spec_dir};
+use spirv_builder_cli::{args::BuildArgs, Linkage, ShaderModule};
 /// `cargo build` subcommands
 #[derive(clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Build {
@@ -23,6 +21,7 @@ pub struct Build {
 
 impl Build {
     /// Entrypoint
+    #[expect(clippy::too_many_lines, reason = "It's not too confusing")]
     pub fn run(&mut self) -> anyhow::Result<()> {
         let spirv_builder_cli_path = self.install.run()?;
 

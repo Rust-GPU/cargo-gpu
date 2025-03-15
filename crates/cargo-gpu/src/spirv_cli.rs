@@ -1,7 +1,11 @@
 //! Query the shader crate to find what version of `rust-gpu` it depends on.
 //! Then ensure that the relevant Rust toolchain and components are installed.
 
-use {crate::spirv_source::SpirvSource, anyhow::Context as _, std::io::Write as _};
+use std::io::Write as _;
+
+use anyhow::Context as _;
+
+use crate::spirv_source::SpirvSource;
 
 /// `Cargo.lock` manifest version 4 became the default in Rust 1.83.0. Conflicting manifest
 /// versions between the workspace and the shader crate, can cause problems.

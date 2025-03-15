@@ -6,7 +6,8 @@
     reason = "This is just a workflow tool"
 )]
 
-use {anyhow::Context as _, clap::Parser as _};
+use anyhow::Context as _;
+use clap::Parser as _;
 
 /// Path to the shader crate
 const SHADER_CRATE_PATH: &str = "crates/shader-crate-template";

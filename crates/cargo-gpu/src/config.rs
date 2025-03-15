@@ -1,5 +1,6 @@
 //! Manage and merge the various sources of config: shader crate's `Cargo.toml`(s) and CLI args.
-use {anyhow::Context as _, clap::Parser as _};
+use anyhow::Context as _;
+use clap::Parser as _;
 
 /// Config
 pub struct Config;
@@ -121,7 +122,9 @@ impl Config {
 
 #[cfg(test)]
 mod test {
-    use {super::*, std::io::Write as _};
+    use super::*;
+
+    use std::io::Write as _;
 
     #[test_log::test]
     fn booleans_from_cli() {
