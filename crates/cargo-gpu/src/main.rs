@@ -93,7 +93,10 @@ fn main() {
     if let Err(error) = run() {
         log::error!("{error:?}");
 
-        #[expect(clippy::print_stderr, reason = "Our central place for outputting error messages")]
+        #[expect(
+            clippy::print_stderr,
+            reason = "Our central place for outputting error messages"
+        )]
         {
             eprintln!("Error: {error}");
 
@@ -120,13 +123,18 @@ fn run() -> anyhow::Result<()> {
     match cli.command {
         Command::Install(install) => {
             let shader_crate_path = install.spirv_install.shader_crate;
-            let mut command = config::Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
-            log::debug!("installing with final merged arguments: {:#?}", command.install);
+            let mut command =
+                config::Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
+            log::debug!(
+                "installing with final merged arguments: {:#?}",
+                command.install
+            );
             command.install.run()?;
         }
         Command::Build(build) => {
             let shader_crate_path = build.install.spirv_install.shader_crate;
-            let mut command = config::Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
+            let mut command =
+                config::Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
             log::debug!("building with final merged arguments: {command:#?}");
 
             if command.build_args.watch {
@@ -211,7 +219,11 @@ fn dump_full_usage_for_readme() -> anyhow::Result<()> {
 }
 
 /// Recursive function to print the usage instructions for each subcommand.
-fn write_help(buffer: &mut impl std::io::Write, cmd: &mut clap::Command, depth: usize) -> anyhow::Result<()> {
+fn write_help(
+    buffer: &mut impl std::io::Write,
+    cmd: &mut clap::Command,
+    depth: usize,
+) -> anyhow::Result<()> {
     if cmd.get_name() == "help" {
         return Ok(());
     }
@@ -219,7 +231,13 @@ fn write_help(buffer: &mut impl std::io::Write, cmd: &mut clap::Command, depth: 
     let mut command = cmd.get_name().to_owned();
     let indent_depth = if depth == 0 || depth == 1 { 0 } else { depth };
     let indent = " ".repeat(indent_depth * 4);
-    writeln!(buffer, "\n{}* {}{}", indent, command.remove(0).to_uppercase(), command)?;
+    writeln!(
+        buffer,
+        "\n{}* {}{}",
+        indent,
+        command.remove(0).to_uppercase(),
+        command
+    )?;
 
     for line in cmd.render_long_help().to_string().lines() {
         writeln!(buffer, "{indent}  {line}")?;
@@ -237,17 +255,23 @@ fn write_help(buffer: &mut impl std::io::Write, cmd: &mut clap::Command, depth: 
 ///
 /// Created from the spirv-builder source dep and the rustc channel.
 fn to_dirname(text: &str) -> String {
-    text.replace([std::path::MAIN_SEPARATOR, '\\', '/', '.', ':', '@', '='], "_")
-        .split(['{', '}', ' ', '\n', '"', '\''])
-        .collect::<Vec<_>>()
-        .concat()
+    text.replace(
+        [std::path::MAIN_SEPARATOR, '\\', '/', '.', ':', '@', '='],
+        "_",
+    )
+    .split(['{', '}', ' ', '\n', '"', '\''])
+    .collect::<Vec<_>>()
+    .concat()
 }
 
 #[cfg(test)]
 mod test {
     use {crate::cache_dir, std::io::Write as _};
 
-    fn copy_dir_all(src: impl AsRef<std::path::Path>, dst: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
+    fn copy_dir_all(
+        src: impl AsRef<std::path::Path>,
+        dst: impl AsRef<std::path::Path>,
+    ) -> anyhow::Result<()> {
         std::fs::create_dir_all(&dst)?;
         for maybe_entry in std::fs::read_dir(src)? {
             let entry = maybe_entry?;

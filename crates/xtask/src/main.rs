@@ -1,5 +1,10 @@
 //! Project/repository utilities.
-#![allow(clippy::shadow_reuse, clippy::unwrap_used, clippy::unwrap_in_result, reason = "This is just a workflow tool")]
+#![allow(
+    clippy::shadow_reuse,
+    clippy::unwrap_used,
+    clippy::unwrap_in_result,
+    reason = "This is just a workflow tool"
+)]
 
 use {anyhow::Context as _, clap::Parser as _};
 
@@ -47,18 +52,28 @@ struct ShaderCrateTemplateCargoTomlWriter {
 impl Drop for ShaderCrateTemplateCargoTomlWriter {
     fn drop(&mut self) {
         log::info!("reverting overwrite of Cargo.toml");
-        std::fs::write(format!("{SHADER_CRATE_PATH}/Cargo.toml"), &self.original_shader_crate_template_str).unwrap();
+        std::fs::write(
+            format!("{SHADER_CRATE_PATH}/Cargo.toml"),
+            &self.original_shader_crate_template_str,
+        )
+        .unwrap();
         log::info!("reverting overwrite of Cargo.lock");
-        std::fs::write(format!("{SHADER_CRATE_PATH}/Cargo.lock"), &self.original_shader_crate_lock_file).unwrap();
+        std::fs::write(
+            format!("{SHADER_CRATE_PATH}/Cargo.lock"),
+            &self.original_shader_crate_lock_file,
+        )
+        .unwrap();
     }
 }
 
 impl ShaderCrateTemplateCargoTomlWriter {
     /// Create a new one
     fn new() -> Self {
-        let original_shader_crate_template_str = std::fs::read_to_string(format!("{SHADER_CRATE_PATH}/Cargo.toml")).unwrap();
+        let original_shader_crate_template_str =
+            std::fs::read_to_string(format!("{SHADER_CRATE_PATH}/Cargo.toml")).unwrap();
         let table = toml::from_str::<toml::Table>(&original_shader_crate_template_str).unwrap();
-        let original_shader_crate_lock_file = std::fs::read_to_string(format!("{SHADER_CRATE_PATH}/Cargo.lock")).unwrap();
+        let original_shader_crate_lock_file =
+            std::fs::read_to_string(format!("{SHADER_CRATE_PATH}/Cargo.lock")).unwrap();
         Self {
             original_shader_crate_template_str,
             original_shader_crate_lock_file,

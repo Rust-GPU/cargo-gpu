@@ -40,7 +40,10 @@ impl Config {
     /// Config for the `cargo gpu build` and `cargo gpu install` can be set in the shader crate's
     /// `Cargo.toml`, so here we load that config first as the base config, and the CLI arguments can
     /// then later override it.
-    pub fn clap_command_with_cargo_config(shader_crate_path: &std::path::PathBuf, mut env_args: Vec<String>) -> anyhow::Result<crate::build::Build> {
+    pub fn clap_command_with_cargo_config(
+        shader_crate_path: &std::path::PathBuf,
+        mut env_args: Vec<String>,
+    ) -> anyhow::Result<crate::build::Build> {
         let mut config = crate::metadata::Metadata::as_json(shader_crate_path)?;
 
         env_args = env_args
@@ -72,7 +75,11 @@ impl Config {
 
     /// Merge 2 JSON objects. But only if the incoming patch value isn't the default value.
     /// Inspired by: <https://stackoverflow.com/a/47142105/575773>
-    pub fn json_merge(left_in: &mut serde_json::Value, right_in: serde_json::Value, maybe_pointer: Option<&String>) -> anyhow::Result<()> {
+    pub fn json_merge(
+        left_in: &mut serde_json::Value,
+        right_in: serde_json::Value,
+        maybe_pointer: Option<&String>,
+    ) -> anyhow::Result<()> {
         let defaults = Self::defaults_as_json()?;
 
         match (left_in, right_in) {
@@ -81,9 +88,10 @@ impl Config {
                     .as_object_mut()
                     .context("Unreachable, we've already proved it's an object")?;
                 for (key, value) in right {
-                    let new_pointer = maybe_pointer
-                        .as_ref()
-                        .map_or_else(|| format!("/{}", key.clone()), |pointer| format!("{}/{}", pointer, key.clone()));
+                    let new_pointer = maybe_pointer.as_ref().map_or_else(
+                        || format!("/{}", key.clone()),
+                        |pointer| format!("{}/{}", pointer, key.clone()),
+                    );
                     Self::json_merge(
                         left_as_object
                             .entry(key.clone())
@@ -158,9 +166,12 @@ mod test {
         let shader_crate_path = crate::test::shader_crate_test_path();
         let mut file = crate::test::overwrite_shader_cargo_toml(&shader_crate_path);
         file.write_all(
-            ["[package.metadata.rust-gpu.build]", "output-dir = \"/the/moon\""]
-                .join("\n")
-                .as_bytes(),
+            [
+                "[package.metadata.rust-gpu.build]",
+                "output-dir = \"/the/moon\"",
+            ]
+            .join("\n")
+            .as_bytes(),
         )
         .unwrap();
         shader_crate_path
@@ -172,9 +183,15 @@ mod test {
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
         if cfg!(target_os = "windows") {
-            assert_eq!(args.build_args.output_dir, std::path::Path::new("C:/the/moon"));
+            assert_eq!(
+                args.build_args.output_dir,
+                std::path::Path::new("C:/the/moon")
+            );
         } else {
-            assert_eq!(args.build_args.output_dir, std::path::Path::new("/the/moon"));
+            assert_eq!(
+                args.build_args.output_dir,
+                std::path::Path::new("/the/moon")
+            );
         }
     }
 
@@ -184,10 +201,18 @@ mod test {
 
         let args = Config::clap_command_with_cargo_config(
             &shader_crate_path,
-            vec!["gpu".to_owned(), "build".to_owned(), "--output-dir".to_owned(), "/the/river".to_owned()],
+            vec![
+                "gpu".to_owned(),
+                "build".to_owned(),
+                "--output-dir".to_owned(),
+                "/the/river".to_owned(),
+            ],
         )
         .unwrap();
-        assert_eq!(args.build_args.output_dir, std::path::Path::new("/the/river"));
+        assert_eq!(
+            args.build_args.output_dir,
+            std::path::Path::new("/the/river")
+        );
     }
 
     #[test_log::test]
@@ -195,9 +220,12 @@ mod test {
         let shader_crate_path = crate::test::shader_crate_test_path();
         let mut file = crate::test::overwrite_shader_cargo_toml(&shader_crate_path);
         file.write_all(
-            ["[package.metadata.rust-gpu.build]", "capability = [\"AtomicStorage\", \"Matrix\"]"]
-                .join("\n")
-                .as_bytes(),
+            [
+                "[package.metadata.rust-gpu.build]",
+                "capability = [\"AtomicStorage\", \"Matrix\"]",
+            ]
+            .join("\n")
+            .as_bytes(),
         )
         .unwrap();
 
@@ -217,7 +245,12 @@ mod test {
 
         let args = Config::clap_command_with_cargo_config(
             &shader_crate_path,
-            vec!["gpu".to_owned(), "build".to_owned(), "--manifest-file".to_owned(), "mymanifest".to_owned()],
+            vec![
+                "gpu".to_owned(),
+                "build".to_owned(),
+                "--manifest-file".to_owned(),
+                "mymanifest".to_owned(),
+            ],
         )
         .unwrap();
         assert_eq!(args.build_args.manifest_file, "mymanifest".to_owned());

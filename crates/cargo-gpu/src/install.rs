@@ -8,33 +8,90 @@ use {
 
 /// These are the files needed to create the dedicated, per-shader `rust-gpu` builder create.
 const SPIRV_BUILDER_FILES: &[(&str, &str)] = &[
-    ("Cargo.toml", include_str!("../../spirv-builder-cli/Cargo.toml")),
-    ("Cargo.lock", include_str!("../../spirv-builder-cli/Cargo.lock")),
-    ("src/main.rs", include_str!("../../spirv-builder-cli/src/main.rs")),
-    ("src/lib.rs", include_str!("../../spirv-builder-cli/src/lib.rs")),
-    ("src/args.rs", include_str!("../../spirv-builder-cli/src/args.rs")),
+    (
+        "Cargo.toml",
+        include_str!("../../spirv-builder-cli/Cargo.toml"),
+    ),
+    (
+        "Cargo.lock",
+        include_str!("../../spirv-builder-cli/Cargo.lock"),
+    ),
+    (
+        "src/main.rs",
+        include_str!("../../spirv-builder-cli/src/main.rs"),
+    ),
+    (
+        "src/lib.rs",
+        include_str!("../../spirv-builder-cli/src/lib.rs"),
+    ),
+    (
+        "src/args.rs",
+        include_str!("../../spirv-builder-cli/src/args.rs"),
+    ),
 ];
 
 /// Metadata for the compile targets supported by `rust-gpu`
 const TARGET_SPECS: &[(&str, &str)] = &[
-    ("spirv-unknown-opengl4.0.json", include_str!("../target-specs/spirv-unknown-opengl4.0.json")),
-    ("spirv-unknown-opengl4.1.json", include_str!("../target-specs/spirv-unknown-opengl4.1.json")),
-    ("spirv-unknown-opengl4.2.json", include_str!("../target-specs/spirv-unknown-opengl4.2.json")),
-    ("spirv-unknown-opengl4.3.json", include_str!("../target-specs/spirv-unknown-opengl4.3.json")),
-    ("spirv-unknown-opengl4.5.json", include_str!("../target-specs/spirv-unknown-opengl4.5.json")),
-    ("spirv-unknown-spv1.0.json", include_str!("../target-specs/spirv-unknown-spv1.0.json")),
-    ("spirv-unknown-spv1.1.json", include_str!("../target-specs/spirv-unknown-spv1.1.json")),
-    ("spirv-unknown-spv1.2.json", include_str!("../target-specs/spirv-unknown-spv1.2.json")),
-    ("spirv-unknown-spv1.3.json", include_str!("../target-specs/spirv-unknown-spv1.3.json")),
-    ("spirv-unknown-spv1.4.json", include_str!("../target-specs/spirv-unknown-spv1.4.json")),
-    ("spirv-unknown-spv1.5.json", include_str!("../target-specs/spirv-unknown-spv1.5.json")),
-    ("spirv-unknown-vulkan1.0.json", include_str!("../target-specs/spirv-unknown-vulkan1.0.json")),
-    ("spirv-unknown-vulkan1.1.json", include_str!("../target-specs/spirv-unknown-vulkan1.1.json")),
+    (
+        "spirv-unknown-opengl4.0.json",
+        include_str!("../target-specs/spirv-unknown-opengl4.0.json"),
+    ),
+    (
+        "spirv-unknown-opengl4.1.json",
+        include_str!("../target-specs/spirv-unknown-opengl4.1.json"),
+    ),
+    (
+        "spirv-unknown-opengl4.2.json",
+        include_str!("../target-specs/spirv-unknown-opengl4.2.json"),
+    ),
+    (
+        "spirv-unknown-opengl4.3.json",
+        include_str!("../target-specs/spirv-unknown-opengl4.3.json"),
+    ),
+    (
+        "spirv-unknown-opengl4.5.json",
+        include_str!("../target-specs/spirv-unknown-opengl4.5.json"),
+    ),
+    (
+        "spirv-unknown-spv1.0.json",
+        include_str!("../target-specs/spirv-unknown-spv1.0.json"),
+    ),
+    (
+        "spirv-unknown-spv1.1.json",
+        include_str!("../target-specs/spirv-unknown-spv1.1.json"),
+    ),
+    (
+        "spirv-unknown-spv1.2.json",
+        include_str!("../target-specs/spirv-unknown-spv1.2.json"),
+    ),
+    (
+        "spirv-unknown-spv1.3.json",
+        include_str!("../target-specs/spirv-unknown-spv1.3.json"),
+    ),
+    (
+        "spirv-unknown-spv1.4.json",
+        include_str!("../target-specs/spirv-unknown-spv1.4.json"),
+    ),
+    (
+        "spirv-unknown-spv1.5.json",
+        include_str!("../target-specs/spirv-unknown-spv1.5.json"),
+    ),
+    (
+        "spirv-unknown-vulkan1.0.json",
+        include_str!("../target-specs/spirv-unknown-vulkan1.0.json"),
+    ),
+    (
+        "spirv-unknown-vulkan1.1.json",
+        include_str!("../target-specs/spirv-unknown-vulkan1.1.json"),
+    ),
     (
         "spirv-unknown-vulkan1.1spv1.4.json",
         include_str!("../target-specs/spirv-unknown-vulkan1.1spv1.4.json"),
     ),
-    ("spirv-unknown-vulkan1.2.json", include_str!("../target-specs/spirv-unknown-vulkan1.2.json")),
+    (
+        "spirv-unknown-vulkan1.2.json",
+        include_str!("../target-specs/spirv-unknown-vulkan1.2.json"),
+    ),
 ];
 
 /// `cargo gpu install`
@@ -70,7 +127,8 @@ impl Install {
         for (filename, contents) in SPIRV_BUILDER_FILES {
             log::debug!("writing {filename}");
             let path = checkout.join(filename);
-            let mut file = std::fs::File::create(&path).with_context(|| format!("creating a file at [{}]", path.display()))?;
+            let mut file = std::fs::File::create(&path)
+                .with_context(|| format!("creating a file at [{}]", path.display()))?;
             let mut replaced_contents = contents.replace("${CHANNEL}", &spirv_cli.channel);
             if filename == &"Cargo.toml" {
                 replaced_contents = Self::update_cargo_toml(&replaced_contents, &spirv_cli.source);
@@ -117,7 +175,8 @@ impl Install {
                 .context("creating target spec dir")?
                 .join(filename);
             if !path.is_file() || self.spirv_install.force_spirv_cli_rebuild {
-                let mut file = std::fs::File::create(&path).with_context(|| format!("creating file at [{}]", path.display()))?;
+                let mut file = std::fs::File::create(&path)
+                    .with_context(|| format!("creating file at [{}]", path.display()))?;
                 file.write_all(contents.as_bytes())
                     .context("writring to file")?;
             }
@@ -130,7 +189,9 @@ impl Install {
         // Ensure the cache dir exists
         let cache_dir = cache_dir()?;
         log::info!("cache directory is '{}'", cache_dir.display());
-        std::fs::create_dir_all(&cache_dir).with_context(|| format!("could not create cache directory '{}'", cache_dir.display()))?;
+        std::fs::create_dir_all(&cache_dir).with_context(|| {
+            format!("could not create cache directory '{}'", cache_dir.display())
+        })?;
 
         let spirv_version = self
             .spirv_cli(&self.spirv_install.shader_crate)
@@ -144,18 +205,31 @@ impl Install {
             .context("getting cached checkout path")?;
         let release = checkout.join("target").join("release");
 
-        let dylib_filename = format!("{}rustc_codegen_spirv{}", std::env::consts::DLL_PREFIX, std::env::consts::DLL_SUFFIX);
+        let dylib_filename = format!(
+            "{}rustc_codegen_spirv{}",
+            std::env::consts::DLL_PREFIX,
+            std::env::consts::DLL_SUFFIX
+        );
         let dylib_path = release.join(&dylib_filename);
         let dest_dylib_path = checkout.join(&dylib_filename);
         let dest_cli_path = checkout.join("spirv-builder-cli");
         if dest_dylib_path.is_file() && dest_cli_path.is_file() {
-            log::info!("cargo-gpu artifacts are already installed in '{}'", checkout.display());
+            log::info!(
+                "cargo-gpu artifacts are already installed in '{}'",
+                checkout.display()
+            );
         }
 
-        if dest_dylib_path.is_file() && dest_cli_path.is_file() && !self.spirv_install.force_spirv_cli_rebuild {
+        if dest_dylib_path.is_file()
+            && dest_cli_path.is_file()
+            && !self.spirv_install.force_spirv_cli_rebuild
+        {
             log::info!("...and so we are aborting the install step.");
         } else {
-            log::debug!("writing spirv-builder-cli source files into '{}'", checkout.display());
+            log::debug!(
+                "writing spirv-builder-cli source files into '{}'",
+                checkout.display()
+            );
             self.write_source_files().context("writing source files")?;
             self.write_target_spec_files()
                 .context("writing target spec files")?;
@@ -174,7 +248,8 @@ impl Install {
 
             build_command.args([
                 "--features",
-                &Self::get_required_spirv_builder_version(spirv_version.date).context("getting required spirv builder version")?,
+                &Self::get_required_spirv_builder_version(spirv_version.date)
+                    .context("getting required spirv builder version")?,
             ]);
 
             log::debug!("building artifacts with `{:?}`", build_command);
@@ -238,6 +313,11 @@ impl Install {
         let parse_date = chrono::NaiveDate::parse_from_str;
         let pre_cli_date = parse_date("2024-04-24", "%Y-%m-%d")?;
 
-        Ok(if date < pre_cli_date { "spirv-builder-pre-cli" } else { "spirv-builder-0_10" }.into())
+        Ok(if date < pre_cli_date {
+            "spirv-builder-pre-cli"
+        } else {
+            "spirv-builder-0_10"
+        }
+        .into())
     }
 }
