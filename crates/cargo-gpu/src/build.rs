@@ -155,10 +155,9 @@ impl Build {
 
 #[cfg(test)]
 mod test {
-    use {
-        crate::{Cli, Command},
-        clap::Parser as _,
-    };
+    use clap::Parser as _;
+
+    use crate::{Cli, Command};
 
     #[test_log::test]
     fn builder_from_params() {
