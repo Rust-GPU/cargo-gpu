@@ -23,7 +23,6 @@ pub struct Build {
 
 impl Build {
     /// Entrypoint
-    #[expect(clippy::too_many_lines, reason = "It's not too confusing")]
     pub fn run(&mut self) -> anyhow::Result<()> {
         let spirv_builder_cli_path = self.install.run()?;
 

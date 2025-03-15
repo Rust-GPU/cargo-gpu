@@ -50,20 +50,22 @@ impl SpirvCli {
     ) -> anyhow::Result<Self> {
         let mut cargo_lock_files_with_changed_manifest_versions = vec![];
 
-        let maybe_shader_crate_lock =
-            Self::ensure_workspace_rust_version_doesnt_conflict_with_shader(shader_crate_path, is_force_overwrite_lockfiles_v4_to_v3)?;
+        let maybe_shader_crate_lock = Self::ensure_workspace_rust_version_doesnt_conflict_with_shader(shader_crate_path, is_force_overwrite_lockfiles_v4_to_v3)
+            .context("ensure_workspace_rust_version_doesnt_conflict_with_shader")?;
 
         if let Some(shader_crate_lock) = maybe_shader_crate_lock {
             cargo_lock_files_with_changed_manifest_versions.push(shader_crate_lock);
         }
 
-        let (default_rust_gpu_source, rust_gpu_date, default_rust_gpu_channel) = SpirvSource::get_rust_gpu_deps_from_shader(shader_crate_path)?;
+        let (default_rust_gpu_source, rust_gpu_date, default_rust_gpu_channel) =
+            SpirvSource::get_rust_gpu_deps_from_shader(shader_crate_path).context("get_rust_gpu_deps_from_shader")?;
 
         let maybe_workspace_crate_lock = Self::ensure_shader_rust_version_doesnt_conflict_with_any_cargo_locks(
             shader_crate_path,
             default_rust_gpu_channel.clone(),
             is_force_overwrite_lockfiles_v4_to_v3,
-        )?;
+        )
+        .context("ensure_shader_rust_version_doesnt_conflict_with_any_cargo_locks")?;
 
         if let Some(workspace_crate_lock) = maybe_workspace_crate_lock {
             cargo_lock_files_with_changed_manifest_versions.push(workspace_crate_lock);
@@ -92,10 +94,13 @@ impl SpirvCli {
 
     /// Create and/or return the cache directory
     pub fn cached_checkout_path(&self) -> anyhow::Result<std::path::PathBuf> {
-        let checkout_dir = crate::cache_dir()?
+        let checkout_dir = crate::cache_dir()
+            .context("reading cache dir")?
             .join("spirv-builder-cli")
             .join(crate::to_dirname(self.to_string().as_ref()));
-        std::fs::create_dir_all(&checkout_dir).with_context(|| format!("could not create checkout dir '{}'", checkout_dir.display()))?;
+        std::fs::create_dir_all(&checkout_dir)
+            .with_context(|| format!("could not create checkout dir '{}'", checkout_dir.display()))
+            .context("crating directory in cahce dir")?;
 
         Ok(checkout_dir)
     }
@@ -110,7 +115,8 @@ impl SpirvCli {
         // Check for the required toolchain
         let output_toolchain_list = std::process::Command::new("rustup")
             .args(["toolchain", "list"])
-            .output()?;
+            .output()
+            .context("running rustup command")?;
         anyhow::ensure!(output_toolchain_list.status.success(), "could not list installed toolchains");
         let string_toolchain_list = String::from_utf8_lossy(&output_toolchain_list.stdout);
         if string_toolchain_list
@@ -128,7 +134,8 @@ impl SpirvCli {
                 .arg(&self.channel)
                 .stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit())
-                .output()?;
+                .output()
+                .context("adding toolchain")?;
             anyhow::ensure!(output_toolchain_add.status.success(), "could not install required toolchain");
         }
 
@@ -136,7 +143,8 @@ impl SpirvCli {
         let output_component_list = std::process::Command::new("rustup")
             .args(["component", "list", "--toolchain"])
             .arg(&self.channel)
-            .output()?;
+            .output()
+            .context("getting toolchain list")?;
         anyhow::ensure!(output_component_list.status.success(), "could not list installed components");
         let string_component_list = String::from_utf8_lossy(&output_component_list.stdout);
         let required_components = ["rust-src", "rustc-dev", "llvm-tools"];
@@ -161,7 +169,8 @@ impl SpirvCli {
                 .args(["rust-src", "rustc-dev", "llvm-tools"])
                 .stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit())
-                .output()?;
+                .output()
+                .context("adding rustup component")?;
             anyhow::ensure!(output_component_add.status.success(), "could not install required components");
         }
 
@@ -174,10 +183,10 @@ impl SpirvCli {
             return Ok(());
         }
         log::debug!("asking for consent to install the required toolchain");
-        crossterm::terminal::enable_raw_mode()?;
+        crossterm::terminal::enable_raw_mode().context("enabling raw mode")?;
         crate::user_output!("{prompt} [y/n]: ");
-        let input = crossterm::event::read()?;
-        crossterm::terminal::disable_raw_mode()?;
+        let input = crossterm::event::read().context("reading crossterm event")?;
+        crossterm::terminal::disable_raw_mode().context("disabling raw mode")?;
 
         if let crossterm::event::Event::Key(crossterm::event::KeyEvent {
             code: crossterm::event::KeyCode::Char('y'),
@@ -197,13 +206,13 @@ impl SpirvCli {
         is_force_overwrite_lockfiles_v4_to_v3: bool,
     ) -> anyhow::Result<Option<std::path::PathBuf>> {
         log::debug!("Ensuring no v3/v4 `Cargo.lock` conflicts from workspace Rust...");
-        let workspace_rust_version = Self::get_rustc_version(None)?;
+        let workspace_rust_version = Self::get_rustc_version(None).context("reading rustc version")?;
         if version_check::Version::at_least(&workspace_rust_version, RUST_VERSION_THAT_USES_V4_CARGO_LOCKS) {
             log::debug!("user's Rust is v{}, so no v3/v4 conflicts possible.", workspace_rust_version);
             return Ok(None);
         }
 
-        Self::handle_conflicting_cargo_lock_v4(shader_crate_path, is_force_overwrite_lockfiles_v4_to_v3)?;
+        Self::handle_conflicting_cargo_lock_v4(shader_crate_path, is_force_overwrite_lockfiles_v4_to_v3).context("handling v4/v3 conflict")?;
 
         if is_force_overwrite_lockfiles_v4_to_v3 {
             Ok(Some(shader_crate_path.join("Cargo.lock")))
@@ -219,7 +228,7 @@ impl SpirvCli {
         is_force_overwrite_lockfiles_v4_to_v3: bool,
     ) -> anyhow::Result<Option<std::path::PathBuf>> {
         log::debug!("Ensuring no v3/v4 `Cargo.lock` conflicts from shader's Rust...");
-        let shader_rust_version = Self::get_rustc_version(Some(channel))?;
+        let shader_rust_version = Self::get_rustc_version(Some(channel)).context("getting rustc version")?;
         if version_check::Version::at_least(&shader_rust_version, RUST_VERSION_THAT_USES_V4_CARGO_LOCKS) {
             log::debug!("shader's Rust is v{}, so no v3/v4 conflicts possible.", shader_rust_version);
             return Ok(None);
@@ -235,11 +244,11 @@ impl SpirvCli {
             // after the build), because we can be sure that updating it now is actually updating it
             // to the state it should have been all along. Therefore it doesn't need reverting once
             // fixed.
-            Self::handle_conflicting_cargo_lock_v4(shader_crate_path, is_force_overwrite_lockfiles_v4_to_v3)?;
+            Self::handle_conflicting_cargo_lock_v4(shader_crate_path, is_force_overwrite_lockfiles_v4_to_v3).context("handling v4/v3 conflict")?;
         }
 
-        if let Some(workspace_root) = Self::get_workspace_root(shader_crate_path)? {
-            Self::handle_conflicting_cargo_lock_v4(workspace_root, is_force_overwrite_lockfiles_v4_to_v3)?;
+        if let Some(workspace_root) = Self::get_workspace_root(shader_crate_path).context("reading workspace root")? {
+            Self::handle_conflicting_cargo_lock_v4(workspace_root, is_force_overwrite_lockfiles_v4_to_v3).context("handling conflicting cargo v4")?;
             return Ok(Some(workspace_root.join("Cargo.lock")));
         }
 
@@ -250,7 +259,8 @@ impl SpirvCli {
     /// `cargo metadata` because if the workspace has a conflicting `Cargo.lock` manifest version
     /// then that command won't work. Instead we do an old school recursive file tree walk.
     fn get_workspace_root(shader_crate_path: &std::path::Path) -> anyhow::Result<Option<&std::path::Path>> {
-        let shader_cargo_toml = std::fs::read_to_string(shader_crate_path.join("Cargo.toml"))?;
+        let shader_cargo_toml =
+            std::fs::read_to_string(shader_crate_path.join("Cargo.toml")).with_context(|| format!("reading Cargo.toml at {}", shader_crate_path.display()))?;
         if !shader_cargo_toml.contains("workspace = true") {
             return Ok(None);
         }
@@ -275,10 +285,10 @@ impl SpirvCli {
     /// files that use lockfile manifest version 4. Here we check and handle that.
     fn handle_conflicting_cargo_lock_v4(folder: &std::path::Path, is_force_overwrite_lockfiles_v4_to_v3: bool) -> anyhow::Result<()> {
         let shader_cargo_lock_path = folder.join("Cargo.lock");
-        let shader_cargo_lock = std::fs::read_to_string(shader_cargo_lock_path.clone())?;
-        let third_line = shader_cargo_lock.lines().nth(2).context("")?;
+        let shader_cargo_lock = std::fs::read_to_string(shader_cargo_lock_path.clone()).context("reading shader cargo lock")?;
+        let third_line = shader_cargo_lock.lines().nth(2).context("no third line")?;
         if third_line.contains("version = 4") {
-            Self::handle_v3v4_conflict(&shader_cargo_lock_path, is_force_overwrite_lockfiles_v4_to_v3)?;
+            Self::handle_v3v4_conflict(&shader_cargo_lock_path, is_force_overwrite_lockfiles_v4_to_v3).context("handling v3v4 conflict")?;
             return Ok(());
         }
         if third_line.contains("version = 3") {
@@ -294,7 +304,7 @@ impl SpirvCli {
             Self::exit_with_v3v4_hack_suggestion();
         }
 
-        Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "4", "3")?;
+        Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "4", "3").context("replacing version 4 -> 3")?;
 
         Ok(())
     }
@@ -304,7 +314,7 @@ impl SpirvCli {
     pub fn revert_cargo_lock_manifest_versions(&self) -> anyhow::Result<()> {
         for offending_cargo_lock in &self.cargo_lock_files_with_changed_manifest_versions {
             log::debug!("Reverting: {}", offending_cargo_lock.display());
-            Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "3", "4")?;
+            Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "3", "4").context("replacing version 3 -> 4")?;
         }
 
         Ok(())
@@ -318,13 +328,14 @@ impl SpirvCli {
             to_version,
             offending_cargo_lock.display()
         );
-        let old_contents = std::fs::read_to_string(offending_cargo_lock)?;
+        let old_contents = std::fs::read_to_string(offending_cargo_lock).context("reading offending Cargo.lock")?;
         let new_contents = old_contents.replace(&format!("\nversion = {from_version}\n"), &format!("\nversion = {to_version}\n"));
 
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .truncate(true)
-            .open(offending_cargo_lock)?;
+            .open(offending_cargo_lock)
+            .context("opening offending Cargo.lock")?;
         file.write_all(new_contents.as_bytes())?;
 
         Ok(())
