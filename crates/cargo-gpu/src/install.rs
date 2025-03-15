@@ -1,4 +1,5 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
+
 use std::io::Write as _;
 
 use anyhow::Context as _;
@@ -117,18 +118,24 @@ impl Install {
 
     /// Create the `spirv-builder-cli` crate.
     fn write_source_files(&self) -> anyhow::Result<()> {
-        let spirv_cli = self.spirv_cli(&self.spirv_install.shader_crate)?;
-        let checkout = spirv_cli.cached_checkout_path()?;
-        std::fs::create_dir_all(checkout.join("src"))?;
+        let spirv_cli = self
+            .spirv_cli(&self.spirv_install.shader_crate)
+            .context("running spirv cli")?;
+        let checkout = spirv_cli
+            .cached_checkout_path()
+            .context("getting cached checkout path")?;
+        std::fs::create_dir_all(checkout.join("src")).context("creating directory for 'src'")?;
         for (filename, contents) in SPIRV_BUILDER_FILES {
             log::debug!("writing {filename}");
             let path = checkout.join(filename);
-            let mut file = std::fs::File::create(&path)?;
+            let mut file = std::fs::File::create(&path)
+                .with_context(|| format!("creating a file at [{}]", path.display()))?;
             let mut replaced_contents = contents.replace("${CHANNEL}", &spirv_cli.channel);
             if filename == &"Cargo.toml" {
                 replaced_contents = Self::update_cargo_toml(&replaced_contents, &spirv_cli.source);
             }
-            file.write_all(replaced_contents.as_bytes())?;
+            file.write_all(replaced_contents.as_bytes())
+                .context("writing to file")?;
         }
         Ok(())
     }
@@ -165,10 +172,14 @@ impl Install {
     /// Add the target spec files to the crate.
     fn write_target_spec_files(&self) -> anyhow::Result<()> {
         for (filename, contents) in TARGET_SPECS {
-            let path = target_spec_dir()?.join(filename);
+            let path = target_spec_dir()
+                .context("creating target spec dir")?
+                .join(filename);
             if !path.is_file() || self.spirv_install.force_spirv_cli_rebuild {
-                let mut file = std::fs::File::create(&path)?;
-                file.write_all(contents.as_bytes())?;
+                let mut file = std::fs::File::create(&path)
+                    .with_context(|| format!("creating file at [{}]", path.display()))?;
+                file.write_all(contents.as_bytes())
+                    .context("writing to file")?;
             }
         }
         Ok(())
@@ -183,10 +194,16 @@ impl Install {
             format!("could not create cache directory '{}'", cache_dir.display())
         })?;
 
-        let spirv_version = self.spirv_cli(&self.spirv_install.shader_crate)?;
-        spirv_version.ensure_toolchain_and_components_exist()?;
+        let spirv_version = self
+            .spirv_cli(&self.spirv_install.shader_crate)
+            .context("running spirv cli")?;
+        spirv_version
+            .ensure_toolchain_and_components_exist()
+            .context("ensuring toolchain and components exist")?;
 
-        let checkout = spirv_version.cached_checkout_path()?;
+        let checkout = spirv_version
+            .cached_checkout_path()
+            .context("getting cached checkout path")?;
         let release = checkout.join("target").join("release");
 
         let dylib_filename = format!(
@@ -214,8 +231,9 @@ impl Install {
                 "writing spirv-builder-cli source files into '{}'",
                 checkout.display()
             );
-            self.write_source_files()?;
-            self.write_target_spec_files()?;
+            self.write_source_files().context("writing source files")?;
+            self.write_target_spec_files()
+                .context("writing target spec files")?;
 
             crate::user_output!(
                 "Compiling shader-specific `spirv-builder-cli` for {}\n",
@@ -231,20 +249,29 @@ impl Install {
 
             build_command.args([
                 "--features",
-                &Self::get_required_spirv_builder_version(spirv_version.date)?,
+                &Self::get_required_spirv_builder_version(spirv_version.date)
+                    .context("getting required spirv builder version")?,
             ]);
 
             log::debug!("building artifacts with `{:?}`", build_command);
 
-            let build_output = build_command
+            build_command
                 .stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit())
-                .output()?;
-            anyhow::ensure!(build_output.status.success(), "...build error!");
+                .output()
+                .context("getting command output")
+                .and_then(|output| {
+                    if output.status.success() {
+                        Ok(output)
+                    } else {
+                        Err(anyhow::anyhow!("bad status {:?}", output.status))
+                    }
+                })
+                .context("running build command")?;
 
             if dylib_path.is_file() {
                 log::info!("successfully built {}", dylib_path.display());
-                std::fs::rename(&dylib_path, &dest_dylib_path)?;
+                std::fs::rename(&dylib_path, &dest_dylib_path).context("renaming dylib path")?;
             } else {
                 log::error!("could not find {}", dylib_path.display());
                 anyhow::bail!("spirv-builder-cli build failed");
@@ -257,11 +284,11 @@ impl Install {
             };
             if cli_path.is_file() {
                 log::info!("successfully built {}", cli_path.display());
-                std::fs::rename(&cli_path, &dest_cli_path)?;
+                std::fs::rename(&cli_path, &dest_cli_path).context("renaming cli path")?;
             } else {
                 log::error!("could not find {}", cli_path.display());
                 log::debug!("contents of '{}':", release.display());
-                for maybe_entry in std::fs::read_dir(&release)? {
+                for maybe_entry in std::fs::read_dir(&release).context("reading release dir")? {
                     let entry = maybe_entry?;
                     log::debug!("{}", entry.file_name().to_string_lossy());
                 }

@@ -5,7 +5,7 @@ use crate::cache_dir;
 /// Show the computed source of the spirv-std dependency.
 #[derive(Clone, Debug, clap::Parser)]
 pub struct SpirvSourceDep {
-    /// The location of the shader-crate to inspect to determine its spirv-std dependency.    
+    /// The location of the shader-crate to inspect to determine its spirv-std dependency.
     #[clap(long, default_value = "./")]
     pub shader_crate: std::path::PathBuf,
 }

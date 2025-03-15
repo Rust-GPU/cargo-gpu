@@ -110,7 +110,7 @@ fn main() {
             #[expect(clippy::restriction, reason = "Our central place for safely exiting")]
             std::process::exit(1);
         };
-    };
+    }
 }
 
 /// Wrappable "main" to catch errors.
@@ -150,11 +150,11 @@ fn run() -> anyhow::Result<()> {
                 command.run()?;
             } else {
                 command.run()?;
-            };
+            }
         }
         Command::Show(show) => show.run()?,
         Command::DumpUsage => dump_full_usage_for_readme()?,
-    };
+    }
 
     Ok(())
 }

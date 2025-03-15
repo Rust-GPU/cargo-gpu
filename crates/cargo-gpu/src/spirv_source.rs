@@ -110,7 +110,7 @@ impl SpirvSource {
         if !canonical_path.is_dir() {
             log::error!("{shader_crate_path:?} is not a directory, aborting");
             anyhow::bail!("{shader_crate_path:?} is not a directory");
-        };
+        }
 
         *shader_crate_path = canonical_path;
 
