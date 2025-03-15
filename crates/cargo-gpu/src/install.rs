@@ -1,4 +1,9 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
+//!
+use std::io::Write as _;
+
+use anyhow::Context as _;
+
 use crate::{cache_dir, spirv_cli::SpirvCli, spirv_source::SpirvSource, target_spec_dir};
 use spirv_builder_cli::args::InstallArgs;
 
