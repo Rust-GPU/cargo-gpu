@@ -209,8 +209,19 @@ impl SpirvCli {
         }
         log::debug!("asking for consent to install the required toolchain");
         crossterm::terminal::enable_raw_mode().context("enabling raw mode")?;
-        crate::user_output!("{prompt} [y/n]: ");
-        let input = crossterm::event::read().context("reading crossterm event")?;
+        crate::user_output!("{prompt} [y/n]: \n");
+        let mut input = crossterm::event::read().context("reading crossterm event")?;
+
+        if let crossterm::event::Event::Key(crossterm::event::KeyEvent {
+            code: crossterm::event::KeyCode::Enter,
+            kind: crossterm::event::KeyEventKind::Release,
+            ..
+        }) = input
+        {
+            // In Powershell, programs will potentially observe the Enter key release after they started
+            // (see crossterm#124). If that happens, re-read the input.
+            input = crossterm::event::read().context("re-reading crossterm event")?;
+        }
         crossterm::terminal::disable_raw_mode().context("disabling raw mode")?;
 
         if let crossterm::event::Event::Key(crossterm::event::KeyEvent {
