@@ -37,7 +37,14 @@ const fn dylib_path_envvar() -> &'static str {
 
 fn set_codegen_spirv_location(dylib_path: std::path::PathBuf) {
     let env_var = dylib_path_envvar();
-    let path = dylib_path.parent().unwrap().display().to_string();
+    let existing_paths_str = std::env::var(env_var).unwrap();
+    let mut dylib_paths = std::env::split_paths(&existing_paths_str).collect::<Vec<_>>();
+
+    let dylib_path = dylib_path.parent().unwrap().to_path_buf();
+    dylib_paths.insert(0, dylib_path);
+
+    let path = std::env::join_paths(dylib_paths).unwrap().into_string().unwrap();
+
     log::debug!("Setting OS-dependent DLL ENV path ({env_var}) to: {path}");
     std::env::set_var(env_var, path);
 }
