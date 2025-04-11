@@ -104,13 +104,12 @@ impl Install {
         {
             let version_spec = match &spirv_cli.source {
                 SpirvSource::CratesIO(version) => {
-                    format!("version = \"{}\"", version.replace('v', ""))
+                    format!("version = \"{}\"", version)
                 }
                 SpirvSource::Git { url, rev } => format!("git = \"{url}\"\nrev = \"{rev}\""),
-                SpirvSource::Path((path, version)) => format!(
-                    "path = \"{path}\"\nversion = \"{}\"",
-                    version.replace('v', "")
-                ),
+                SpirvSource::Path((path, version)) => {
+                    format!("path = \"{path}\"\nversion = \"{}\"", version)
+                }
             };
             let cargo_toml = format!(
                 r#"

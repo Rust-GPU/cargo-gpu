@@ -3,9 +3,9 @@
 
 use std::io::Write as _;
 
-use anyhow::Context as _;
-
 use crate::spirv_source::SpirvSource;
+use anyhow::Context as _;
+use cargo_metadata::semver::Version;
 
 /// `Cargo.lock` manifest version 4 became the default in Rust 1.83.0. Conflicting manifest
 /// versions between the workspace and the shader crate, can cause problems.
@@ -86,7 +86,7 @@ impl SpirvCli {
 
         let mut maybe_spirv_source: Option<SpirvSource> = None;
         if let Some(rust_gpu_version) = maybe_rust_gpu_version {
-            let mut source = SpirvSource::CratesIO(rust_gpu_version.clone());
+            let mut source = SpirvSource::CratesIO(Version::parse(&rust_gpu_version)?);
             if let Some(rust_gpu_source) = maybe_rust_gpu_source {
                 source = SpirvSource::Git {
                     url: rust_gpu_source,
@@ -501,7 +501,7 @@ mod test {
             .map(std::string::ToString::to_string)
             .unwrap();
         assert_eq!(
-            "https___github_com_Rust-GPU_rust-gpu+82a0f69+nightly-2024-04-24",
+            "https___github_com_Rust-GPU_rust-gpu+82a0f69008414f51d59184763146caa6850ac588+nightly-2024-04-24",
             &name
         );
     }
