@@ -10,6 +10,7 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+cargo_metadata.workspace = true
 anyhow.workspace = true
 spirv-builder-cli = { path = "../spirv-builder-cli", default-features = false, features = ["rspirv-latest"] }
 clap.workspace = true

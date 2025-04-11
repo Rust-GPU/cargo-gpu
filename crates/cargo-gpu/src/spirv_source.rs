@@ -4,7 +4,9 @@
 //! version. Then with that we `git checkout` the `rust-gpu` repo that corresponds to that version.
 //! From there we can look at the source code to get the required Rust toolchain.
 
-use anyhow::Context as _;
+use anyhow::{anyhow, Context as _};
+use cargo_metadata::{MetadataCommand, Package};
+use cargo_metadata::semver::Version;
 
 /// The canonical `rust-gpu` URI
 const RUST_GPU_REPO: &str = "https://github.com/Rust-GPU/rust-gpu";
@@ -16,9 +18,7 @@ const RUST_GPU_REPO: &str = "https://github.com/Rust-GPU/rust-gpu";
 pub enum SpirvSource {
     /// If the shader specifies a simple version like `spirv-std = "0.9.0"` then the source of
     /// `rust-gpu` is the conventional crates.io version.
-    ///
-    /// `String` is the simple version like, "0.9.0"
-    CratesIO(String),
+    CratesIO(Version),
     /// If the shader specifies a version like:
     ///   `spirv-std = { git = "https://github.com..." ... }`
     /// then the source of `rust-gpu` is `Git`.
@@ -31,7 +31,7 @@ pub enum SpirvSource {
     /// If the shader specifies a version like:
     ///   `spirv-std = { path = "/path/to/rust-gpu" ... }`
     /// then the source of `rust-gpu` is `Path`.
-    Path((String, String)),
+    Path((String, Version)),
 }
 
 impl core::fmt::Display for SpirvSource {
@@ -41,7 +41,7 @@ impl core::fmt::Display for SpirvSource {
     )]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::CratesIO(version) => f.write_str(version),
+            Self::CratesIO(version) => version.fmt(f),
             Self::Git { url, rev } => f.write_str(&format!("{url}+{rev}")),
             Self::Path((a, b)) => f.write_str(&format!("{a}+{b}")),
         }
@@ -204,124 +204,57 @@ impl SpirvSource {
         let canonical_shader_path = shader_crate_path.to_path_buf();
         Self::shader_crate_path_canonical(&mut canonical_shader_path.clone())?;
 
-        log::debug!(
-            "Running `cargo tree` on {}",
-            canonical_shader_path.display()
-        );
-        let output_cargo_tree = std::process::Command::new("cargo")
-            .current_dir(canonical_shader_path.clone())
-            .args(["tree", "--workspace", "--prefix", "none"])
-            .output()?;
-        anyhow::ensure!(
-            output_cargo_tree.status.success(),
-            format!(
-                "could not query shader's `Cargo.toml` for `spirv-std` dependency: {}",
-                String::from_utf8(output_cargo_tree.stderr)?
-            )
-        );
-        let cargo_tree_string = String::from_utf8_lossy(&output_cargo_tree.stdout);
+        log::debug!("Running `cargo metadata` on {}", canonical_shader_path.display());
+        let metadata = MetadataCommand::new()
+            .current_dir(&canonical_shader_path)
+            .exec()?;
 
-        let maybe_spirv_std_def = cargo_tree_string
-            .lines()
-            .find(|line| line.contains("spirv-std"));
-        log::trace!("  found {maybe_spirv_std_def:?}");
-
-        let Some(spirv_std_def) = maybe_spirv_std_def else {
-            anyhow::bail!("`spirv-std` not found in shader's `Cargo.toml` at {canonical_shader_path:?}:\n{cargo_tree_string}");
+        let Some(spirv_std_package) = metadata.packages
+            .iter()
+            .find(|package| package.name.eq("spirv-std")) else {
+            anyhow::bail!("`spirv-std` not found in shader's `Cargo.toml` at {canonical_shader_path:?}");
         };
+        log::trace!("  found {spirv_std_package:?}");
 
-        Self::parse_spirv_std_source_and_version(spirv_std_def)
+        Ok(Self::parse_spirv_std_source_and_version(spirv_std_package)?)
     }
 
     /// Parse a string like:
     ///   `spirv-std v0.9.0 (https://github.com/Rust-GPU/rust-gpu?rev=54f6978c#54f6978c) (*)`
     /// Which would return:
     ///   `SpirvSource::Git("https://github.com/Rust-GPU/rust-gpu", "54f6978c")`
-    fn parse_spirv_std_source_and_version(spirv_std_def: &str) -> anyhow::Result<Self> {
-        log::trace!("parsing spirv-std source and version from def: '{spirv_std_def}'");
-        let parts: Vec<String> = spirv_std_def.split_whitespace().map(String::from).collect();
-        let version = parts
-            .get(1)
-            .context("Couldn't find `spirv_std` version in shader crate")?
-            .to_owned();
-        let mut source = Self::CratesIO(version.clone());
+    fn parse_spirv_std_source_and_version(spirv_std_package: &Package) -> anyhow::Result<Self> {
+        log::trace!("parsing spirv-std source and version from package: '{:?}'", spirv_std_package);
+        
+        let result = match &spirv_std_package.source {
+            Some(source) => {
+                let is_git = source.repr.starts_with("git+");
+                let is_crates_io = source.is_crates_io();
 
-        if parts.len() > 2 {
-            let mut source_string = parts
-                .get(2)
-                .context("Couldn't get Uri from dependency string")?
-                .to_owned();
-            source_string = source_string.replace(['(', ')'], "");
-
-            // Unfortunately Uri ignores the fragment/hash portion of the Uri.
-            //
-            // There's been a ticket open for years:
-            // <https://github.com/hyperium/http/issues/127>
-            //
-            // So here we'll parse the fragment out of the source string by hand
-            let uri = source_string.parse::<http::Uri>()?;
-            let maybe_hash = if source_string.contains('#') {
-                let mut splits = source_string.split('#');
-                splits.next_back().map(std::borrow::ToOwned::to_owned)
-            } else {
-                None
-            };
-            if uri.scheme().is_some() {
-                source = Self::parse_git_source(version, &uri, maybe_hash)?;
-            } else {
-                source = Self::Path((source_string, version));
+                match (is_git, is_crates_io) {
+                    (true, true) => unreachable!(),
+                    (true, false) => {
+                        let link = &source.repr[4..];
+                        let sharp_index = link.find('#').ok_or(anyhow!("Git url of spirv-std package does not contain revision!"))?;
+                        let question_mark_index = link.find('?').ok_or(anyhow!("Git url of spirv-std package does not contain revision!"))?;
+                        let url = link[..question_mark_index].to_string();
+                        let rev = link[sharp_index + 1..].to_string();
+                        Self::Git { url, rev }
+                    },
+                    (false, true) => Self::CratesIO(spirv_std_package.version.clone()),
+                    (false, false) => anyhow::bail!("Metadata of spirv-std package uses unknown url format!"),
+                }
             }
-        }
+            None => {
+                let path = &spirv_std_package.manifest_path;
+                let version = &spirv_std_package.version;
+                Self::Path((path.to_string(), version.clone()))
+            }
+        };
 
-        log::debug!("Parsed `rust-gpu` source and version: {source:?}");
+        log::debug!("Parsed `rust-gpu` source and version: {result:?}");
 
-        Ok(source)
-    }
-
-    /// Parse a Git source like: `https://github.com/Rust-GPU/rust-gpu?rev=54f6978c#54f6978c`
-    fn parse_git_source(
-        version: String,
-        uri: &http::Uri,
-        fragment: Option<String>,
-    ) -> anyhow::Result<Self> {
-        log::trace!(
-            "parsing git source from version: '{version}' and uri: '{uri}' and fragment: {}",
-            fragment.as_deref().unwrap_or("?")
-        );
-        let repo = format!(
-            "{}://{}{}",
-            uri.scheme().context("Couldn't parse scheme from Uri")?,
-            uri.host().context("Couldn't parse host from Uri")?,
-            uri.path()
-        );
-
-        let rev = Self::parse_git_revision(uri.query(), fragment, version);
-
-        Ok(Self::Git { url: repo, rev })
-    }
-
-    /// Decide the Git revision to use.
-    fn parse_git_revision(
-        maybe_query: Option<&str>,
-        maybe_fragment: Option<String>,
-        version: String,
-    ) -> String {
-        let marker = "rev=";
-        let maybe_sane_query = maybe_query.and_then(|query| {
-            // TODO: This might seem a little crude, but it saves adding a whole query parsing dependency.
-            let sanity_check = query.contains(marker) && query.split('=').count() == 2;
-            sanity_check.then_some(query)
-        });
-
-        if let Some(query) = maybe_sane_query {
-            return query.replace(marker, "");
-        }
-
-        if let Some(fragment) = maybe_fragment {
-            return fragment;
-        }
-
-        version
+        Ok(result)
     }
 
     /// `git clone` the `rust-gpu` repo. We use it to get the required Rust toolchain to compile
@@ -377,34 +310,7 @@ mod test {
             source,
             SpirvSource::Git {
                 url: "https://github.com/Rust-GPU/rust-gpu".to_owned(),
-                rev: "82a0f69".to_owned()
-            }
-        );
-    }
-
-    #[test_log::test]
-    fn parsing_spirv_std_dep_for_git_source() {
-        let definition =
-            "spirv-std v9.9.9 (https://github.com/Rust-GPU/rust-gpu?rev=82a0f69#82a0f69) (*)";
-        let source = SpirvSource::parse_spirv_std_source_and_version(definition).unwrap();
-        assert_eq!(
-            source,
-            SpirvSource::Git {
-                url: "https://github.com/Rust-GPU/rust-gpu".to_owned(),
-                rev: "82a0f69".to_owned()
-            }
-        );
-    }
-
-    #[test_log::test]
-    fn parsing_spirv_std_dep_for_git_source_hash() {
-        let definition = "spirv-std v9.9.9 (https://github.com/Rust-GPU/rust-gpu#82a0f69) (*)";
-        let source = SpirvSource::parse_spirv_std_source_and_version(definition).unwrap();
-        assert_eq!(
-            source,
-            SpirvSource::Git {
-                url: "https://github.com/Rust-GPU/rust-gpu".to_owned(),
-                rev: "82a0f69".to_owned()
+                rev: "82a0f69008414f51d59184763146caa6850ac588".to_owned()
             }
         );
     }

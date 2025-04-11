@@ -1,5 +1,6 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
 
+use std::fmt::Debug;
 use std::io::Write as _;
 
 use anyhow::Context as _;
@@ -156,7 +157,7 @@ impl Install {
             if line.contains("${AUTO-REPLACE-VERSION}") {
                 let replaced_line = match spirv_source {
                     SpirvSource::CratesIO(version) | SpirvSource::Path((_, version)) => {
-                        format!("version = \"{}\"", version.replace('v', ""))
+                        format!("version = \"{}\"", version)
                     }
                     SpirvSource::Git { rev, .. } => format!("rev = \"{rev}\""),
                 };
