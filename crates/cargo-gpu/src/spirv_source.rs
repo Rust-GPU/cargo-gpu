@@ -5,8 +5,11 @@
 //! From there we can look at the source code to get the required Rust toolchain.
 
 use anyhow::{anyhow, Context as _};
-use cargo_metadata::{MetadataCommand, Package};
+use cargo_metadata::camino::Utf8PathBuf;
 use cargo_metadata::semver::Version;
+use cargo_metadata::{MetadataCommand, Package};
+use std::fs;
+use std::path::Path;
 
 /// The canonical `rust-gpu` URI
 const RUST_GPU_REPO: &str = "https://github.com/Rust-GPU/rust-gpu";
@@ -31,7 +34,10 @@ pub enum SpirvSource {
     /// If the shader specifies a version like:
     ///   `spirv-std = { path = "/path/to/rust-gpu" ... }`
     /// then the source of `rust-gpu` is `Path`.
-    Path((String, Version)),
+    Path {
+        rust_gpu_path: Utf8PathBuf,
+        version: Version,
+    },
 }
 
 impl core::fmt::Display for SpirvSource {
@@ -43,14 +49,17 @@ impl core::fmt::Display for SpirvSource {
         match self {
             Self::CratesIO(version) => version.fmt(f),
             Self::Git { url, rev } => f.write_str(&format!("{url}+{rev}")),
-            Self::Path((a, b)) => f.write_str(&format!("{a}+{b}")),
+            Self::Path {
+                rust_gpu_path,
+                version,
+            } => f.write_str(&format!("{rust_gpu_path}+{version}")),
         }
     }
 }
 
 impl SpirvSource {
     /// Look into the shader crate to get the version of `rust-gpu` it's using.
-    pub fn get_rust_gpu_deps_from_shader<F: AsRef<std::path::Path>>(
+    pub fn get_rust_gpu_deps_from_shader<F: AsRef<Path>>(
         shader_crate_path: F,
     ) -> anyhow::Result<(Self, chrono::NaiveDate, String)> {
         let rust_gpu_source = Self::get_spirv_std_dep_definition(shader_crate_path.as_ref())?;
@@ -71,17 +80,18 @@ impl SpirvSource {
     /// Convert the source to just its version.
     pub fn to_version(&self) -> String {
         match self {
-            Self::CratesIO(version) | Self::Path((_, version)) => version.to_string(),
+            Self::CratesIO(version) | Self::Path { version, .. } => version.to_string(),
             Self::Git { rev, .. } => rev.to_string(),
         }
     }
 
     /// Convert the source to just its repo or path.
+    /// Must be root of git repository.
     fn to_repo(&self) -> String {
         match self {
             Self::CratesIO(_) => RUST_GPU_REPO.to_owned(),
             Self::Git { url, .. } => url.to_owned(),
-            Self::Path((path, _)) => path.to_owned(),
+            Self::Path { rust_gpu_path, .. } => rust_gpu_path.to_string(),
         }
     }
 
@@ -119,20 +129,28 @@ impl SpirvSource {
 
     /// Checkout the `rust-gpu` repo to the requested version.
     fn checkout(&self) -> anyhow::Result<()> {
+        let Self::Git { rev, .. } = self else {
+            log::trace!("Skipping checking out rust-gpu",);
+            return Ok(());
+        };
+
         log::debug!(
             "Checking out `rust-gpu` repo at {} to {}",
             self.to_dirname()?.display(),
             self.to_version()
         );
-        let output_checkout = std::process::Command::new("git")
+        let mut command_checkout = std::process::Command::new("git");
+        command_checkout
             .current_dir(self.to_dirname()?)
-            .args(["checkout", self.to_version().as_ref()])
-            .output()?;
+            .args(["checkout", rev]);
+        log::debug!("Running command {:?}", command_checkout);
+        let output_checkout = command_checkout.output()?;
         anyhow::ensure!(
             output_checkout.status.success(),
-            "couldn't checkout revision '{}' of `rust-gpu` at {}",
+            "couldn't checkout revision '{}' of `rust-gpu` at {}. \n Error Output: {}",
             self.to_version(),
-            self.to_dirname()?.to_string_lossy()
+            self.to_dirname()?.to_string_lossy(),
+            String::from_utf8(output_checkout.stderr).unwrap()
         );
 
         Ok(())
@@ -154,7 +172,7 @@ impl SpirvSource {
                 "--no-patch",
                 "--format=%cd",
                 format!("--date=format:'{date_format}'").as_ref(),
-                self.to_version().as_ref(),
+                "HEAD",
             ])
             .output()?;
         anyhow::ensure!(
@@ -183,7 +201,7 @@ impl SpirvSource {
     fn get_channel_from_toolchain_toml(path: &std::path::PathBuf) -> anyhow::Result<String> {
         log::debug!("Parsing `rust-toolchain.toml` at {path:?} for the used toolchain");
 
-        let contents = std::fs::read_to_string(path.join("rust-toolchain.toml"))?;
+        let contents = fs::read_to_string(path.join("rust-toolchain.toml"))?;
         let toml: toml::Table = toml::from_str(&contents)?;
         let Some(toolchain) = toml.get("toolchain") else {
             anyhow::bail!(
@@ -198,21 +216,26 @@ impl SpirvSource {
     }
 
     /// Get the shader crate's resolved `spirv_std = ...` definition in its `Cargo.toml`/`Cargo.lock`
-    pub fn get_spirv_std_dep_definition(
-        shader_crate_path: &std::path::Path,
-    ) -> anyhow::Result<Self> {
+    pub fn get_spirv_std_dep_definition(shader_crate_path: &Path) -> anyhow::Result<Self> {
         let canonical_shader_path = shader_crate_path.to_path_buf();
         Self::shader_crate_path_canonical(&mut canonical_shader_path.clone())?;
 
-        log::debug!("Running `cargo metadata` on {}", canonical_shader_path.display());
+        log::debug!(
+            "Running `cargo metadata` on {}",
+            canonical_shader_path.display()
+        );
         let metadata = MetadataCommand::new()
             .current_dir(&canonical_shader_path)
             .exec()?;
 
-        let Some(spirv_std_package) = metadata.packages
+        let Some(spirv_std_package) = metadata
+            .packages
             .iter()
-            .find(|package| package.name.eq("spirv-std")) else {
-            anyhow::bail!("`spirv-std` not found in shader's `Cargo.toml` at {canonical_shader_path:?}");
+            .find(|package| package.name.eq("spirv-std"))
+        else {
+            anyhow::bail!(
+                "`spirv-std` not found in shader's `Cargo.toml` at {canonical_shader_path:?}"
+            );
         };
         log::trace!("  found {spirv_std_package:?}");
 
@@ -224,8 +247,11 @@ impl SpirvSource {
     /// Which would return:
     ///   `SpirvSource::Git("https://github.com/Rust-GPU/rust-gpu", "54f6978c")`
     fn parse_spirv_std_source_and_version(spirv_std_package: &Package) -> anyhow::Result<Self> {
-        log::trace!("parsing spirv-std source and version from package: '{:?}'", spirv_std_package);
-        
+        log::trace!(
+            "parsing spirv-std source and version from package: '{:?}'",
+            spirv_std_package
+        );
+
         let result = match &spirv_std_package.source {
             Some(source) => {
                 let is_git = source.repr.starts_with("git+");
@@ -235,20 +261,37 @@ impl SpirvSource {
                     (true, true) => unreachable!(),
                     (true, false) => {
                         let link = &source.repr[4..];
-                        let sharp_index = link.find('#').ok_or(anyhow!("Git url of spirv-std package does not contain revision!"))?;
-                        let question_mark_index = link.find('?').ok_or(anyhow!("Git url of spirv-std package does not contain revision!"))?;
+                        let sharp_index = link.find('#').ok_or(anyhow!(
+                            "Git url of spirv-std package does not contain revision!"
+                        ))?;
+                        let question_mark_index = link.find('?').ok_or(anyhow!(
+                            "Git url of spirv-std package does not contain revision!"
+                        ))?;
                         let url = link[..question_mark_index].to_string();
                         let rev = link[sharp_index + 1..].to_string();
                         Self::Git { url, rev }
-                    },
+                    }
                     (false, true) => Self::CratesIO(spirv_std_package.version.clone()),
-                    (false, false) => anyhow::bail!("Metadata of spirv-std package uses unknown url format!"),
+                    (false, false) => {
+                        anyhow::bail!("Metadata of spirv-std package uses unknown url format!")
+                    }
                 }
             }
             None => {
-                let path = &spirv_std_package.manifest_path;
-                let version = &spirv_std_package.version;
-                Self::Path((path.to_string(), version.clone()))
+                let rust_gpu_path = spirv_std_package
+                    .manifest_path // rust-gpu/crates/spirv-std/Cargo.toml
+                    .parent()
+                    .unwrap() // rust-gpu/crates/spirv-std
+                    .parent()
+                    .unwrap() // rust-gpu/crates
+                    .parent()
+                    .unwrap() // rust-gpu
+                    .to_owned();
+                let version = spirv_std_package.version.clone();
+                Self::Path {
+                    rust_gpu_path,
+                    version,
+                }
             }
         };
 

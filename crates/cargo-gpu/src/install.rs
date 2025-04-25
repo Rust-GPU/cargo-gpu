@@ -149,14 +149,18 @@ impl Install {
                 let replaced_line = match spirv_source {
                     SpirvSource::CratesIO(_) => String::new(),
                     SpirvSource::Git { url, .. } => format!("git = \"{url}\""),
-                    SpirvSource::Path((path, _)) => format!("path = \"{path}\""),
+                    SpirvSource::Path { rust_gpu_path, .. } => {
+                        let mut new_path = rust_gpu_path.to_owned();
+                        new_path.push("crates/spirv-std");
+                        format!("path = \"{new_path}\"")
+                    },
                 };
                 return format!("{replaced_line}\n");
             }
 
             if line.contains("${AUTO-REPLACE-VERSION}") {
                 let replaced_line = match spirv_source {
-                    SpirvSource::CratesIO(version) | SpirvSource::Path((_, version)) => {
+                    SpirvSource::CratesIO(version) | SpirvSource::Path { version, ..} => {
                         format!("version = \"{}\"", version)
                     }
                     SpirvSource::Git { rev, .. } => format!("rev = \"{rev}\""),

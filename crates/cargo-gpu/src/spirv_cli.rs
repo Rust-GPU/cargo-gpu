@@ -4,6 +4,7 @@
 use std::io::Write as _;
 
 use anyhow::Context as _;
+use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::semver::Version;
 use crate::spirv_source::SpirvSource;
 
@@ -113,7 +114,7 @@ impl SpirvCli {
             .join(crate::to_dirname(self.to_string().as_ref()));
         std::fs::create_dir_all(&checkout_dir)
             .with_context(|| format!("could not create checkout dir '{}'", checkout_dir.display()))
-            .context("crating directory in cahce dir")?;
+            .context("crating directory in cache dir")?;
 
         Ok(checkout_dir)
     }
