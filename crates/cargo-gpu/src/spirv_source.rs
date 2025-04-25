@@ -5,8 +5,10 @@
 //! From there we can look at the source code to get the required Rust toolchain.
 
 use anyhow::{anyhow, Context as _};
+use cargo_metadata::camino::Utf8PathBuf;
 use cargo_metadata::semver::Version;
 use cargo_metadata::{MetadataCommand, Package};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 /// The canonical `rust-gpu` URI
@@ -32,7 +34,12 @@ pub enum SpirvSource {
     /// If the shader specifies a version like:
     ///   `spirv-std = { path = "/path/to/rust-gpu" ... }`
     /// then the source of `rust-gpu` is `Path`.
-    Path((String, Version)),
+    Path {
+        /// File path of rust-gpu repository
+        rust_gpu_path: Utf8PathBuf,
+        /// Version of specified rust-gpu repository
+        version: Version,
+    },
 }
 
 impl core::fmt::Display for SpirvSource {
@@ -44,7 +51,10 @@ impl core::fmt::Display for SpirvSource {
         match self {
             Self::CratesIO(version) => version.fmt(f),
             Self::Git { url, rev } => f.write_str(&format!("{url}+{rev}")),
-            Self::Path((a, b)) => f.write_str(&format!("{a}+{b}")),
+            Self::Path {
+                rust_gpu_path,
+                version,
+            } => f.write_str(&format!("{rust_gpu_path}+{version}")),
         }
     }
 }
@@ -72,17 +82,18 @@ impl SpirvSource {
     /// Convert the source to just its version.
     pub fn to_version(&self) -> String {
         match self {
-            Self::CratesIO(version) | Self::Path((_, version)) => version.to_string(),
+            Self::CratesIO(version) | Self::Path { version, .. } => version.to_string(),
             Self::Git { rev, .. } => rev.to_string(),
         }
     }
 
     /// Convert the source to just its repo or path.
+    /// Must be root of git repository.
     fn to_repo(&self) -> String {
         match self {
             Self::CratesIO(_) => RUST_GPU_REPO.to_owned(),
             Self::Git { url, .. } => url.to_owned(),
-            Self::Path((path, _)) => path.to_owned(),
+            Self::Path { rust_gpu_path, .. } => rust_gpu_path.to_string(),
         }
     }
 
@@ -115,20 +126,28 @@ impl SpirvSource {
 
     /// Checkout the `rust-gpu` repo to the requested version.
     fn checkout(&self) -> anyhow::Result<()> {
+        let Self::Git { rev, .. } = self else {
+            log::trace!("Skipping checking out rust-gpu",);
+            return Ok(());
+        };
+
         log::debug!(
             "Checking out `rust-gpu` repo at {} to {}",
             self.to_dirname()?.display(),
             self.to_version()
         );
-        let output_checkout = std::process::Command::new("git")
+        let mut command_checkout = std::process::Command::new("git");
+        command_checkout
             .current_dir(self.to_dirname()?)
-            .args(["checkout", self.to_version().as_ref()])
-            .output()?;
+            .args(["checkout", rev]);
+        log::debug!("Running command {:?}", command_checkout);
+        let output_checkout = command_checkout.output()?;
         anyhow::ensure!(
             output_checkout.status.success(),
-            "couldn't checkout revision '{}' of `rust-gpu` at {}",
+            "couldn't checkout revision '{}' of `rust-gpu` at {}. \n Error Output: {}",
             self.to_version(),
-            self.to_dirname()?.to_string_lossy()
+            self.to_dirname()?.to_string_lossy(),
+            String::from_utf8(output_checkout.stderr).unwrap()
         );
 
         Ok(())
@@ -150,7 +169,7 @@ impl SpirvSource {
                 "--no-patch",
                 "--format=%cd",
                 format!("--date=format:'{date_format}'").as_ref(),
-                self.to_version().as_ref(),
+                "HEAD",
             ])
             .output()?;
         anyhow::ensure!(
@@ -179,7 +198,7 @@ impl SpirvSource {
     fn get_channel_from_toolchain_toml(path: &PathBuf) -> anyhow::Result<String> {
         log::debug!("Parsing `rust-toolchain.toml` at {path:?} for the used toolchain");
 
-        let contents = std::fs::read_to_string(path.join("rust-toolchain.toml"))?;
+        let contents = fs::read_to_string(path.join("rust-toolchain.toml"))?;
         let toml: toml::Table = toml::from_str(&contents)?;
         let Some(toolchain) = toml.get("toolchain") else {
             anyhow::bail!(
@@ -255,9 +274,20 @@ impl SpirvSource {
                 }
             }
             None => {
-                let path = &spirv_std_package.manifest_path;
-                let version = &spirv_std_package.version;
-                Self::Path((path.to_string(), version.clone()))
+                let rust_gpu_path = spirv_std_package
+                    .manifest_path // rust-gpu/crates/spirv-std/Cargo.toml
+                    .parent()
+                    .unwrap() // rust-gpu/crates/spirv-std
+                    .parent()
+                    .unwrap() // rust-gpu/crates
+                    .parent()
+                    .unwrap() // rust-gpu
+                    .to_owned();
+                let version = spirv_std_package.version.clone();
+                Self::Path {
+                    rust_gpu_path,
+                    version,
+                }
             }
         };
 

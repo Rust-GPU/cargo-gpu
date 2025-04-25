@@ -107,8 +107,13 @@ impl Install {
                     format!("version = \"{}\"", version)
                 }
                 SpirvSource::Git { url, rev } => format!("git = \"{url}\"\nrev = \"{rev}\""),
-                SpirvSource::Path((path, version)) => {
-                    format!("path = \"{path}\"\nversion = \"{}\"", version)
+                SpirvSource::Path {
+                    rust_gpu_path,
+                    version,
+                } => {
+                    let mut new_path = rust_gpu_path.to_owned();
+                    new_path.push("crates/spirv-builder");
+                    format!("path = \"{new_path}\"\nversion = \"{}\"", version)
                 }
             };
             let cargo_toml = format!(
