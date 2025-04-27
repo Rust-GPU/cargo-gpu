@@ -202,7 +202,8 @@ package = "rustc_codegen_spirv"
             build_command
                 .current_dir(&checkout)
                 .arg(format!("+{}", spirv_version.channel))
-                .args(["build", "--release"]);
+                .args(["build", "--release"])
+                .env_remove("RUSTC");
 
             log::debug!("building artifacts with `{build_command:?}`");
 
