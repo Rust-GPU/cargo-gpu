@@ -151,7 +151,7 @@ impl Install {
                     SpirvSource::Git { url, .. } => format!("git = \"{url}\""),
                     SpirvSource::Path { rust_gpu_path, .. } => {
                         let mut new_path = rust_gpu_path.to_owned();
-                        new_path.push("crates/spirv-std");
+                        new_path.push("crates/spirv-builder");
                         format!("path = \"{new_path}\"")
                     },
                 };

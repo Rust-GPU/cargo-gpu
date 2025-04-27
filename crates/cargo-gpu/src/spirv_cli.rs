@@ -4,7 +4,6 @@
 use std::io::Write as _;
 
 use anyhow::Context as _;
-use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::semver::Version;
 use crate::spirv_source::SpirvSource;
 

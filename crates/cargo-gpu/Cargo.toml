@@ -12,7 +12,7 @@ build = "build.rs"
 [dependencies]
 cargo_metadata.workspace = true
 anyhow.workspace = true
-spirv-builder-cli = { path = "../spirv-builder-cli", default-features = true, features = ["rspirv-latest"] }
+spirv-builder-cli = { path = "../spirv-builder-cli", default-features = false, features = ["rspirv-latest"] }
 clap.workspace = true
 directories.workspace = true
 env_logger.workspace = true
