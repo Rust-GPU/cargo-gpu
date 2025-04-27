@@ -35,7 +35,9 @@ pub enum SpirvSource {
     ///   `spirv-std = { path = "/path/to/rust-gpu" ... }`
     /// then the source of `rust-gpu` is `Path`.
     Path {
+        /// File path of rust-gpu repository
         rust_gpu_path: Utf8PathBuf,
+        /// Version of specified rust-gpu repository
         version: Version,
     },
 }
