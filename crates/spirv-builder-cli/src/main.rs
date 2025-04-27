@@ -17,11 +17,11 @@ use spirv_builder_cli::ShaderModule;
 const RUSTC_NIGHTLY_CHANNEL: &str = "${CHANNEL}";
 
 fn set_rustup_toolchain() {
-    log::trace!(
-        "setting RUSTUP_TOOLCHAIN = '{}'",
-        RUSTC_NIGHTLY_CHANNEL.trim_matches('"')
-    );
-    std::env::set_var("RUSTUP_TOOLCHAIN", RUSTC_NIGHTLY_CHANNEL.trim_matches('"'));
+    let toolchain = RUSTC_NIGHTLY_CHANNEL.trim_matches('"');
+
+    log::trace!("setting RUSTUP_TOOLCHAIN = '{}'", toolchain);
+    std::env::set_var("RUSTUP_TOOLCHAIN", toolchain);
+    std::env::remove_var("RUSTC");
 }
 
 /// Get the OS-dependent ENV variable name for the list of paths pointing to .so/.dll files
@@ -43,7 +43,10 @@ fn set_codegen_spirv_location(dylib_path: std::path::PathBuf) {
     let dylib_path = dylib_path.parent().unwrap().to_path_buf();
     dylib_paths.insert(0, dylib_path);
 
-    let path = std::env::join_paths(dylib_paths).unwrap().into_string().unwrap();
+    let path = std::env::join_paths(dylib_paths)
+        .unwrap()
+        .into_string()
+        .unwrap();
 
     log::debug!("Setting OS-dependent DLL ENV path ({env_var}) to: {path}");
     std::env::set_var(env_var, path);

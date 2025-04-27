@@ -250,7 +250,8 @@ impl Install {
                 .current_dir(&checkout)
                 .arg(format!("+{}", spirv_version.channel))
                 .args(["build", "--release"])
-                .args(["--no-default-features"]);
+                .args(["--no-default-features"])
+                .env_remove("RUSTC");
 
             build_command.args([
                 "--features",
