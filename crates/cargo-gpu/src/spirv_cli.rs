@@ -483,12 +483,9 @@ impl Drop for SpirvCli {
 mod test {
     use super::*;
 
-    #[ignore]
     #[test_log::test]
     fn cached_checkout_dir_sanity() {
         let shader_template_path = crate::test::shader_crate_template_path();
-        // TODO: This downloads the `rust-gpu` repo which slows the test down. Can we avoid that
-        // just to get the sanity check?
         let spirv = SpirvCli::new(&shader_template_path, None, None, None, true, false).unwrap();
         let dir = spirv.cached_checkout_path().unwrap();
         let name = dir
