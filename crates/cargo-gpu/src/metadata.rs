@@ -64,7 +64,7 @@ impl Metadata {
                 let mut crate_meta = Self::get_crate_metadata(cargo_json, path)?;
                 log::trace!("crate_metadata: {crate_meta:#?}");
                 if let Some(output_path) = crate_meta.pointer_mut("/build/output_dir") {
-                    log::debug!("found output-dir path in crate metadata: {:?}", output_path);
+                    log::debug!("found output-dir path in crate metadata: {output_path:?}");
                     if let Some(output_dir) = output_path.clone().as_str() {
                         let new_output_path = path.join(output_dir);
                         *output_path = Value::String(format!("{}", new_output_path.display()));

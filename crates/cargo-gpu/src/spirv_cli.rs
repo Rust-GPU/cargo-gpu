@@ -249,8 +249,7 @@ impl SpirvCli {
             RUST_VERSION_THAT_USES_V4_CARGO_LOCKS,
         ) {
             log::debug!(
-                "user's Rust is v{}, so no v3/v4 conflicts possible.",
-                workspace_rust_version
+                "user's Rust is v{workspace_rust_version}, so no v3/v4 conflicts possible."
             );
             return Ok(None);
         }
@@ -281,16 +280,12 @@ impl SpirvCli {
             &shader_rust_version,
             RUST_VERSION_THAT_USES_V4_CARGO_LOCKS,
         ) {
-            log::debug!(
-                "shader's Rust is v{}, so no v3/v4 conflicts possible.",
-                shader_rust_version
-            );
+            log::debug!("shader's Rust is v{shader_rust_version}, so no v3/v4 conflicts possible.");
             return Ok(None);
         }
 
         log::debug!(
-            "shader's Rust is v{}, so checking both shader and workspace `Cargo.lock` manifest versions...",
-            shader_rust_version
+            "shader's Rust is v{shader_rust_version}, so checking both shader and workspace `Cargo.lock` manifest versions..."
         );
 
         if shader_crate_path.join("Cargo.lock").exists() {

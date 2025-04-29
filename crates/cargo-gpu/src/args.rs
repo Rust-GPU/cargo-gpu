@@ -1,12 +1,20 @@
+//! Args for building and installing. Previously in `spirv-tools-cli` but got moved here.
+
+use spirv_builder::SpirvBuilder;
+
+/// All args for a build and install
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct AllArgs {
+    /// build args
     #[clap(flatten)]
     pub build: BuildArgs,
 
+    /// install args
     #[clap(flatten)]
     pub install: InstallArgs,
 }
 
+/// Args for just a build
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct BuildArgs {
     /// Path to the output directory for the compiled shaders.
@@ -17,17 +25,20 @@ pub struct BuildArgs {
     #[clap(long, short, action)]
     pub watch: bool,
 
+    /// the flattened [`SpirvBuilder`]
     #[clap(flatten)]
     #[serde(flatten)]
-    pub spirv_builder: spirv_builder::SpirvBuilder,
+    pub spirv_builder: SpirvBuilder,
 
     ///Renames the manifest.json file to the given name
     #[clap(long, short, default_value = "manifest.json")]
     pub manifest_file: String,
 }
 
+/// Args for an install
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct InstallArgs {
+    /// path to the `rustc_codegen_spirv` dylib
     #[clap(long, hide(true), default_value = "INTERNALLY_SET")]
     pub dylib_path: std::path::PathBuf,
 
@@ -35,6 +46,10 @@ pub struct InstallArgs {
     #[clap(long, default_value = "./")]
     pub shader_crate: std::path::PathBuf,
 
+    #[expect(
+        clippy::doc_markdown,
+        reason = "The URL should appear literally like this. But Clippy wants it to be a in markdown clickable link"
+    )]
     /// Source of `spirv-builder` dependency
     /// Eg: "https://github.com/Rust-GPU/rust-gpu"
     #[clap(long)]
@@ -81,8 +96,8 @@ pub struct InstallArgs {
     ///
     /// This hack is possible because the change from v3 to v4 only involves a minor change to the
     /// way source URLs are encoded. See these PRs for more details:
-    ///   * https://github.com/rust-lang/cargo/pull/12280
-    ///   * https://github.com/rust-lang/cargo/pull/14595
+    ///   * <https://github.com/rust-lang/cargo/pull/12280>
+    ///   * <https://github.com/rust-lang/cargo/pull/14595>
     #[clap(long, action, verbatim_doc_comment)]
     pub force_overwrite_lockfiles_v4_to_v3: bool,
 }

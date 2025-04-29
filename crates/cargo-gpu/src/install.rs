@@ -93,13 +93,13 @@ impl Install {
     }
 
     /// Create the `rustc_codegen_spirv_dummy` crate that depends on `rustc_codegen_spirv`
-    fn write_source_files(&self, spirv_cli: &SpirvCli, checkout: &Path) -> anyhow::Result<()> {
+    fn write_source_files(spirv_cli: &SpirvCli, checkout: &Path) -> anyhow::Result<()> {
         {
             let main = "fn main() {}";
             let src = checkout.join("src");
             std::fs::create_dir_all(&src).context("creating directory for 'src'")?;
             std::fs::write(src.join("main.rs"), main).context("writing 'main.rs'")?;
-        }
+        };
 
         {
             let version_spec = match &spirv_cli.source {
@@ -126,7 +126,7 @@ package = "rustc_codegen_spirv"
             );
             std::fs::write(checkout.join("Cargo.toml"), cargo_toml)
                 .context("writing 'Cargo.toml'")?;
-        }
+        };
         Ok(())
     }
 
@@ -185,8 +185,7 @@ package = "rustc_codegen_spirv"
                 "writing rustc_codegen_spirv_dummy source files into '{}'",
                 checkout.display()
             );
-            self.write_source_files(&spirv_version, &checkout)
-                .context("writing source files")?;
+            Self::write_source_files(&spirv_version, &checkout).context("writing source files")?;
             self.write_target_spec_files()
                 .context("writing target spec files")?;
 
@@ -201,7 +200,7 @@ package = "rustc_codegen_spirv"
                 .arg(format!("+{}", spirv_version.channel))
                 .args(["build", "--release"]);
 
-            log::debug!("building artifacts with `{:?}`", build_command);
+            log::debug!("building artifacts with `{build_command:?}`");
 
             build_command
                 .stdout(std::process::Stdio::inherit())

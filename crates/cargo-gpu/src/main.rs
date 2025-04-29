@@ -165,10 +165,10 @@ fn run() -> anyhow::Result<()> {
 #[derive(clap::Subcommand)]
 enum Command {
     /// Install rust-gpu compiler artifacts.
-    Install(Install),
+    Install(Box<Install>),
 
     /// Compile a shader crate to SPIR-V.
-    Build(Build),
+    Build(Box<Build>),
 
     /// Show some useful values.
     Show(Show),

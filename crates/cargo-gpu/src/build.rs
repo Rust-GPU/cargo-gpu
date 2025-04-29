@@ -56,7 +56,7 @@ impl Build {
                             .spirv_builder
                             .target
                             .as_ref()
-                            .expect("target to be set")
+                            .context("expect target to be set")?
                     ))
                     .display()
                     .to_string(),
