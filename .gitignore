@@ -25,3 +25,5 @@ crates/shader-crate-template/shaders
 tmp/*
 crates/shader-crate-template/manifest.json
 crates/shader-crate-template/rust_gpu_shader_crate_template.spv
+
+.idea
