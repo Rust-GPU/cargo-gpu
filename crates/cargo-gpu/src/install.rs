@@ -97,8 +97,8 @@ impl Install {
         {
             let main = "fn main() {}";
             let src = checkout.join("src");
-            std::fs::create_dir_all(src).context("creating directory for 'src'")?;
-            std::fs::write(checkout.join("main.rs"), main).context("writing 'main.rs'")?;
+            std::fs::create_dir_all(&src).context("creating directory for 'src'")?;
+            std::fs::write(src.join("main.rs"), main).context("writing 'main.rs'")?;
         }
 
         {
