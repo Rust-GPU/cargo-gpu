@@ -7,11 +7,12 @@ repository = "https://github.com/Rust-GPU/cargo-gpu"
 readme = "../../README.md"
 keywords = ["gpu", "compiler"]
 build = "build.rs"
+default-run = "cargo-gpu"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow.workspace = true
-spirv-builder-cli = { path = "../spirv-builder-cli", default-features = false, features = ["rspirv-latest"] }
+spirv-builder = { workspace = true, features = ["clap"] }
 clap.workspace = true
 directories.workspace = true
 env_logger.workspace = true

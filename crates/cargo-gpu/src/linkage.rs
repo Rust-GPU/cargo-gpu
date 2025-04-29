@@ -1,11 +1,3 @@
-pub mod args;
-
-#[cfg(feature = "spirv-builder-pre-cli")]
-pub use spirv_0_2 as spirv;
-
-#[cfg(any(feature = "spirv-builder-0_10", feature = "rspirv-latest"))]
-pub use spirv_0_3 as spirv;
-
 /// Shader source and entry point that can be used to create shader linkage.
 #[derive(serde::Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Linkage {

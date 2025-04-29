@@ -5,11 +5,6 @@ members = [
 ]
 
 exclude = [
-		# Can't be included because it depends on a specific Rust toolchain and considering that
-		# the reason it exists is to prevent Rust toolchain requirements from polluting workspaces
-		# then let's just not try to workaround it.
-    "crates/spirv-builder-cli",
-
     # This currently needs to be excluded because it depends on a version of `rust-gpu` that
     # uses a toolchain whose Cargo version doesn't recognise version 4 of `Cargo.lock`.
     "crates/shader-crate-template"
@@ -18,8 +13,9 @@ exclude = [
 resolver = "2"
 
 [workspace.dependencies]
+spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu.git", rev = "d643a65a0ab32e84993715e6bbdd38635a24a0b3", default-features = false }
 anyhow = "1.0.94"
-clap = { version = "4.4.8", features = ["derive"] }
+clap = { version = "4.5.37", features = ["derive"] }
 chrono = { version = "0.4.38", default-features = false, features = ["std"] }
 crossterm = "0.28.1"
 directories = "5.0.1"

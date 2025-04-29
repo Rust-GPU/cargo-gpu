@@ -4,32 +4,8 @@ use std::io::Write as _;
 
 use anyhow::Context as _;
 
+use crate::args::InstallArgs;
 use crate::{cache_dir, spirv_cli::SpirvCli, spirv_source::SpirvSource, target_spec_dir};
-use spirv_builder_cli::args::InstallArgs;
-
-/// These are the files needed to create the dedicated, per-shader `rust-gpu` builder create.
-const SPIRV_BUILDER_FILES: &[(&str, &str)] = &[
-    (
-        "Cargo.toml",
-        include_str!("../../spirv-builder-cli/Cargo.toml"),
-    ),
-    (
-        "Cargo.lock",
-        include_str!("../../spirv-builder-cli/Cargo.lock"),
-    ),
-    (
-        "src/main.rs",
-        include_str!("../../spirv-builder-cli/src/main.rs"),
-    ),
-    (
-        "src/lib.rs",
-        include_str!("../../spirv-builder-cli/src/lib.rs"),
-    ),
-    (
-        "src/args.rs",
-        include_str!("../../spirv-builder-cli/src/args.rs"),
-    ),
-];
 
 /// Metadata for the compile targets supported by `rust-gpu`
 const TARGET_SPECS: &[(&str, &str)] = &[
@@ -125,7 +101,9 @@ impl Install {
             .cached_checkout_path()
             .context("getting cached checkout path")?;
         std::fs::create_dir_all(checkout.join("src")).context("creating directory for 'src'")?;
-        for (filename, contents) in SPIRV_BUILDER_FILES {
+        // TODO adjust to new system
+        let builder_files = &[("", ""); 0];
+        for (filename, contents) in builder_files {
             log::debug!("writing {filename}");
             let path = checkout.join(filename);
             let mut file = std::fs::File::create(&path)

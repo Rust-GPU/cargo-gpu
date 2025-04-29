@@ -5,8 +5,9 @@
 use anyhow::Context as _;
 use std::io::Write as _;
 
+use crate::args::BuildArgs;
+use crate::linkage::{Linkage, ShaderModule};
 use crate::{install::Install, target_spec_dir};
-use spirv_builder_cli::{args::BuildArgs, Linkage, ShaderModule};
 
 /// `cargo build` subcommands
 #[derive(clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
@@ -47,10 +48,19 @@ impl Build {
         );
 
         if !self.build_args.watch {
-            self.build_args.shader_target = target_spec_dir()?
-                .join(format!("{}.json", self.build_args.shader_target))
-                .display()
-                .to_string();
+            self.build_args.spirv_builder.target = Some(
+                target_spec_dir()?
+                    .join(format!(
+                        "{}.json",
+                        self.build_args
+                            .spirv_builder
+                            .target
+                            .as_ref()
+                            .expect("target to be set")
+                    ))
+                    .display()
+                    .to_string(),
+            );
         }
 
         let args_as_json = serde_json::json!({

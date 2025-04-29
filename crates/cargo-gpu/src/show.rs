@@ -71,11 +71,11 @@ impl Show {
     }
 
     /// Iterator over all `Capability` variants.
-    fn capability_variants_iter() -> impl Iterator<Item = spirv_builder_cli::spirv::Capability> {
+    fn capability_variants_iter() -> impl Iterator<Item = spirv_builder::Capability> {
         // Since spirv::Capability is repr(u32) we can iterate over
         // u32s until some maximum
         #[expect(clippy::as_conversions, reason = "We know all variants are repr(u32)")]
-        let last_capability = spirv_builder_cli::spirv::Capability::CacheControlsINTEL as u32;
-        (0..=last_capability).filter_map(spirv_builder_cli::spirv::Capability::from_u32)
+        let last_capability = spirv_builder::Capability::CacheControlsINTEL as u32;
+        (0..=last_capability).filter_map(spirv_builder::Capability::from_u32)
     }
 }

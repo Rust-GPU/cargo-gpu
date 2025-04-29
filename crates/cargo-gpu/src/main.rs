@@ -57,9 +57,11 @@ use clap::Parser as _;
 use install::Install;
 use show::Show;
 
+mod args;
 mod build;
 mod config;
 mod install;
+mod linkage;
 mod metadata;
 mod show;
 mod spirv_cli;
