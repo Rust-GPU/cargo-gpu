@@ -25,7 +25,7 @@ impl Build {
     /// Entrypoint
     #[expect(clippy::too_many_lines, reason = "It's not too confusing")]
     pub fn run(&mut self) -> anyhow::Result<()> {
-        let spirv_builder_cli_path = self.install.run()?;
+        self.install.run()?;
 
         // Ensure the shader output dir exists
         log::debug!(
@@ -77,8 +77,8 @@ impl Build {
             );
         }
 
-        // Call spirv-builder-cli to compile the shaders.
-        let output = std::process::Command::new(spirv_builder_cli_path)
+        // TODO Call spirv-builder-cli to compile the shaders.
+        let output = std::process::Command::new("TODO_DUMMY_PLEASE_CHANGE_ME")
             .arg(arg)
             .stdout(std::process::Stdio::inherit())
             .stderr(std::process::Stdio::inherit())
