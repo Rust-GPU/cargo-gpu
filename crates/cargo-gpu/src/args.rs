@@ -18,6 +18,7 @@ pub struct BuildArgs {
     pub watch: bool,
 
     #[clap(flatten)]
+    #[serde(flatten)]
     pub spirv_builder: spirv_builder::SpirvBuilder,
 
     ///Renames the manifest.json file to the given name

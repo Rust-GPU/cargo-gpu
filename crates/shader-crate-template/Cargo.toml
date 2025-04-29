@@ -24,24 +24,24 @@ glam = { version = "0.29", features = ["std"] }
 # TODO: Should it default to the root of the shader crate?
 output-dir = "./"
 # Set shader crate's cargo default-features
-no_default_features = false
+default_features = true
 # Set shader crate's cargo features.
 features = []
 # The compile target.
 # TODO: `cargo gpu show targets` for all available options.
-shader-target = "spirv-unknown-vulkan1.2"
+target = "spirv-unknown-vulkan1.2"
 # Treat warnings as errors during compilation.
 deny-warnings = false
 # Compile shaders in debug mode.
-debug = false
+release = true
 # Enables the provided SPIR-V capabilities.
 # See: `impl core::str::FromStr for spirv_builder::Capability`.
 # TODO: `cargo gpu show capabilities` for all available options.
-capability = []
+capabilities = []
 # Enables the provided SPIR-V extensions.
 # See https://github.com/KhronosGroup/SPIRV-Registry for all extensions
 # TODO: `cargo gpu show extensions` for all available options.
-extension = []
+extensions = []
 # Compile one .spv file per shader entry point.
 multimodule = false
 # Set the level of metadata included in the SPIR-V binary.
