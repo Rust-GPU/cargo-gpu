@@ -27,8 +27,6 @@ pub struct SpirvCli {
     pub source: SpirvSource,
     /// The toolchain channel that `rust-gpu` uses, eg "nightly-2024-04-24"
     pub channel: String,
-    /// The date of the pinned version of `rust-gpu`
-    pub date: chrono::NaiveDate,
     /// `Cargo.lock`s that have had their manifest versions changed by us and need changing back.
     pub cargo_lock_files_with_changed_manifest_versions: Vec<std::path::PathBuf>,
     /// Has the user overridden the toolchain consent prompt
@@ -68,7 +66,7 @@ impl SpirvCli {
             cargo_lock_files_with_changed_manifest_versions.push(shader_crate_lock);
         }
 
-        let (default_rust_gpu_source, rust_gpu_date, default_rust_gpu_channel) =
+        let (default_rust_gpu_source, default_rust_gpu_channel) =
             SpirvSource::get_rust_gpu_deps_from_shader(shader_crate_path)
                 .context("get_rust_gpu_deps_from_shader")?;
 
@@ -99,7 +97,6 @@ impl SpirvCli {
         Ok(Self {
             source: maybe_spirv_source.unwrap_or(default_rust_gpu_source),
             channel: maybe_rust_gpu_channel.unwrap_or(default_rust_gpu_channel),
-            date: rust_gpu_date,
             is_toolchain_install_consent,
             cargo_lock_files_with_changed_manifest_versions,
         })

@@ -46,10 +46,11 @@ impl Show {
                 println!("{}\n", cache_dir()?.display());
             }
             Info::SpirvSource(SpirvSourceDep { shader_crate }) => {
-                let rust_gpu_source =
-                    crate::spirv_source::SpirvSource::get_spirv_std_dep_definition(&shader_crate)?;
+                let (rust_gpu_source, toolchain) =
+                    crate::spirv_source::SpirvSource::get_rust_gpu_deps_from_shader(&shader_crate)?;
                 {
                     println!("{rust_gpu_source}\n");
+                    println!("toolchain: {toolchain}\n");
                 }
             }
             Info::Commitsh => {

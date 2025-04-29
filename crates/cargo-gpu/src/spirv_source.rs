@@ -5,7 +5,7 @@
 //! From there we can look at the source code to get the required Rust toolchain.
 
 use anyhow::{anyhow, Context as _};
-use cargo_metadata::camino::Utf8PathBuf;
+use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::semver::Version;
 use cargo_metadata::{MetadataCommand, Package};
 use std::fs;
@@ -63,20 +63,15 @@ impl SpirvSource {
     /// Look into the shader crate to get the version of `rust-gpu` it's using.
     pub fn get_rust_gpu_deps_from_shader<F: AsRef<Path>>(
         shader_crate_path: F,
-    ) -> anyhow::Result<(Self, chrono::NaiveDate, String)> {
-        let rust_gpu_source = Self::get_spirv_std_dep_definition(shader_crate_path.as_ref())?;
-        rust_gpu_source.ensure_repo_is_installed()?;
-        rust_gpu_source.checkout()?;
-
-        let date = rust_gpu_source.get_version_date()?;
-        let channel = Self::get_channel_from_toolchain_toml(&rust_gpu_source.to_dirname()?)?;
-
+    ) -> anyhow::Result<(Self, String)> {
+        let spirv_std_package = Self::get_spirv_std_package(shader_crate_path.as_ref())?;
+        let spirv_source = Self::parse_spirv_std_source_and_version(&spirv_std_package)?;
+        let channel = Self::get_channel_from_toolchain_toml(&spirv_std_package)?;
         log::debug!(
-            "Parsed version, date and toolchain channel from shader-defined `rust-gpu`: \
-            {rust_gpu_source:?}, {date}, {channel}"
+            "Parsed version and toolchain channel from shader-defined `rust-gpu`: \
+            {spirv_source:?}, {channel}"
         );
-
-        Ok((rust_gpu_source, date, channel))
+        Ok((spirv_source, channel))
     }
 
     /// Convert the source to just its version.
@@ -124,78 +119,16 @@ impl SpirvSource {
         Ok(canonical_path)
     }
 
-    /// Checkout the `rust-gpu` repo to the requested version.
-    fn checkout(&self) -> anyhow::Result<()> {
-        let Self::Git { rev, .. } = self else {
-            log::trace!("Skipping checking out rust-gpu",);
-            return Ok(());
-        };
-
-        log::debug!(
-            "Checking out `rust-gpu` repo at {} to {}",
-            self.to_dirname()?.display(),
-            self.to_version()
-        );
-        let mut command_checkout = std::process::Command::new("git");
-        command_checkout
-            .current_dir(self.to_dirname()?)
-            .args(["checkout", rev]);
-        log::debug!("Running command {:?}", command_checkout);
-        let output_checkout = command_checkout.output()?;
-        anyhow::ensure!(
-            output_checkout.status.success(),
-            "couldn't checkout revision '{}' of `rust-gpu` at {}. \n Error Output: {}",
-            self.to_version(),
-            self.to_dirname()?.to_string_lossy(),
-            String::from_utf8(output_checkout.stderr).unwrap()
-        );
-
-        Ok(())
-    }
-
-    /// Get the date of the version of `rust-gpu` used by the shader. This allows us to know what
-    /// features we can use in the `spirv-builder` crate.
-    fn get_version_date(&self) -> anyhow::Result<chrono::NaiveDate> {
-        let date_format = "%Y-%m-%d";
-
-        log::debug!(
-            "Getting `rust-gpu` version date from {}",
-            self.to_dirname()?.display(),
-        );
-        let output_date = std::process::Command::new("git")
-            .current_dir(self.to_dirname()?)
-            .args([
-                "show",
-                "--no-patch",
-                "--format=%cd",
-                format!("--date=format:'{date_format}'").as_ref(),
-                "HEAD",
-            ])
-            .output()?;
-        anyhow::ensure!(
-            output_date.status.success(),
-            "couldn't get `rust-gpu` version date at for {} at {}",
-            self.to_version(),
-            self.to_dirname()?.to_string_lossy()
-        );
-        let date_string = String::from_utf8_lossy(&output_date.stdout)
-            .to_string()
-            .trim()
-            .replace('\'', "");
-
-        log::debug!(
-            "Parsed date for version {}: {date_string}",
-            self.to_version()
-        );
-
-        Ok(chrono::NaiveDate::parse_from_str(
-            &date_string,
-            date_format,
-        )?)
-    }
-
     /// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
-    fn get_channel_from_toolchain_toml(path: &PathBuf) -> anyhow::Result<String> {
+    fn get_channel_from_toolchain_toml(spirv_std_package: &Package) -> anyhow::Result<String> {
+        // TODO can we query the toolchain toml from spirv_std, or should we rather do that from rustc_codegen_spirv within our build dir?
+        let path = spirv_std_package
+            .manifest_path
+            .parent()
+            .and_then(Utf8Path::parent)
+            .and_then(Utf8Path::parent)
+            .context("parent of spirv_std")?;
+
         log::debug!("Parsing `rust-toolchain.toml` at {path:?} for the used toolchain");
 
         let contents = fs::read_to_string(path.join("rust-toolchain.toml"))?;
@@ -213,7 +146,7 @@ impl SpirvSource {
     }
 
     /// Get the shader crate's resolved `spirv_std = ...` definition in its `Cargo.toml`/`Cargo.lock`
-    pub fn get_spirv_std_dep_definition(shader_crate_path: &Path) -> anyhow::Result<Self> {
+    pub fn get_spirv_std_package(shader_crate_path: &Path) -> anyhow::Result<Package> {
         let canonical_shader_path = Self::shader_crate_path_canonical(shader_crate_path)?;
 
         log::debug!(
@@ -226,7 +159,7 @@ impl SpirvSource {
 
         let Some(spirv_std_package) = metadata
             .packages
-            .iter()
+            .into_iter()
             .find(|package| package.name.eq("spirv-std"))
         else {
             anyhow::bail!(
@@ -234,8 +167,7 @@ impl SpirvSource {
             );
         };
         log::trace!("  found {spirv_std_package:?}");
-
-        Ok(Self::parse_spirv_std_source_and_version(spirv_std_package)?)
+        Ok(spirv_std_package)
     }
 
     /// Parse a string like:
@@ -295,46 +227,6 @@ impl SpirvSource {
 
         Ok(result)
     }
-
-    /// `git clone` the `rust-gpu` repo. We use it to get the required Rust toolchain to compile
-    /// the shader.
-    fn ensure_repo_is_installed(&self) -> anyhow::Result<()> {
-        if self.to_dirname()?.exists() {
-            log::debug!(
-                "Not cloning `rust-gpu` repo ({}) as it already exists at {}",
-                self.to_repo(),
-                self.to_dirname()?.to_string_lossy().as_ref(),
-            );
-            return Ok(());
-        }
-
-        log::debug!(
-            "Cloning `rust-gpu` repo {} to {}",
-            self.to_repo(),
-            self.to_dirname()?.to_string_lossy().as_ref(),
-        );
-
-        crate::user_output!("Cloning `rust-gpu` repo...\n");
-
-        //  TODO: do something else when testing, to help speed things up.
-        let output_clone = std::process::Command::new("git")
-            .args([
-                "clone",
-                self.to_repo().as_ref(),
-                self.to_dirname()?.to_string_lossy().as_ref(),
-            ])
-            .output()?;
-
-        anyhow::ensure!(
-            output_clone.status.success(),
-            "couldn't clone `rust-gpu` {} to {}\n{}",
-            self.to_repo(),
-            self.to_dirname()?.to_string_lossy(),
-            String::from_utf8_lossy(&output_clone.stderr)
-        );
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -344,7 +236,8 @@ mod test {
     #[test_log::test]
     fn parsing_spirv_std_dep_for_shader_template() {
         let shader_template_path = crate::test::shader_crate_template_path();
-        let source = SpirvSource::get_spirv_std_dep_definition(&shader_template_path).unwrap();
+        let (source, _) =
+            SpirvSource::get_rust_gpu_deps_from_shader(&shader_template_path).unwrap();
         assert_eq!(
             source,
             SpirvSource::Git {
