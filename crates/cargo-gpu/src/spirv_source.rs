@@ -5,6 +5,7 @@
 //! From there we can look at the source code to get the required Rust toolchain.
 
 use anyhow::Context as _;
+use std::path::{Path, PathBuf};
 
 /// The canonical `rust-gpu` URI
 const RUST_GPU_REPO: &str = "https://github.com/Rust-GPU/rust-gpu";
@@ -50,7 +51,7 @@ impl core::fmt::Display for SpirvSource {
 
 impl SpirvSource {
     /// Look into the shader crate to get the version of `rust-gpu` it's using.
-    pub fn get_rust_gpu_deps_from_shader<F: AsRef<std::path::Path>>(
+    pub fn get_rust_gpu_deps_from_shader<F: AsRef<Path>>(
         shader_crate_path: F,
     ) -> anyhow::Result<(Self, chrono::NaiveDate, String)> {
         let rust_gpu_source = Self::get_spirv_std_dep_definition(shader_crate_path.as_ref())?;
@@ -94,16 +95,14 @@ impl SpirvSource {
     }
 
     /// Make sure shader crate path is absolute and canonical.
-    fn shader_crate_path_canonical(
-        shader_crate_path: &mut std::path::PathBuf,
-    ) -> anyhow::Result<()> {
-        let cwd = std::env::current_dir().context("no cwd")?;
-        let mut canonical_path = shader_crate_path.clone();
+    fn shader_crate_path_canonical(shader_crate_path: &Path) -> anyhow::Result<PathBuf> {
+        let mut canonical_path = shader_crate_path.to_path_buf();
 
         if !canonical_path.is_absolute() {
+            let cwd = std::env::current_dir().context("no cwd")?;
             canonical_path = cwd.join(canonical_path);
         }
-        canonical_path
+        canonical_path = canonical_path
             .canonicalize()
             .context("could not get absolute path to shader crate")?;
 
@@ -111,10 +110,7 @@ impl SpirvSource {
             log::error!("{shader_crate_path:?} is not a directory, aborting");
             anyhow::bail!("{shader_crate_path:?} is not a directory");
         }
-
-        *shader_crate_path = canonical_path;
-
-        Ok(())
+        Ok(canonical_path)
     }
 
     /// Checkout the `rust-gpu` repo to the requested version.
@@ -180,7 +176,7 @@ impl SpirvSource {
     }
 
     /// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
-    fn get_channel_from_toolchain_toml(path: &std::path::PathBuf) -> anyhow::Result<String> {
+    fn get_channel_from_toolchain_toml(path: &PathBuf) -> anyhow::Result<String> {
         log::debug!("Parsing `rust-toolchain.toml` at {path:?} for the used toolchain");
 
         let contents = std::fs::read_to_string(path.join("rust-toolchain.toml"))?;
@@ -198,11 +194,8 @@ impl SpirvSource {
     }
 
     /// Get the shader crate's resolved `spirv_std = ...` definition in its `Cargo.toml`/`Cargo.lock`
-    pub fn get_spirv_std_dep_definition(
-        shader_crate_path: &std::path::Path,
-    ) -> anyhow::Result<Self> {
-        let canonical_shader_path = shader_crate_path.to_path_buf();
-        Self::shader_crate_path_canonical(&mut canonical_shader_path.clone())?;
+    pub fn get_spirv_std_dep_definition(shader_crate_path: &Path) -> anyhow::Result<Self> {
+        let canonical_shader_path = Self::shader_crate_path_canonical(shader_crate_path)?;
 
         log::debug!(
             "Running `cargo tree` on {}",
