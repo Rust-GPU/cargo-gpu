@@ -168,7 +168,7 @@ mod test {
     fn generates_defaults() {
         let json = serde_json::json!({});
         let configs = Metadata::merge_configs(&json, std::path::Path::new("./")).unwrap();
-        assert_eq!(configs["build"]["debug"], serde_json::Value::Bool(false));
+        assert_eq!(configs["build"]["release"], serde_json::Value::Bool(true));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],
             serde_json::Value::Bool(false)
@@ -180,7 +180,7 @@ mod test {
         let json = serde_json::json!(
             { "metadata": { "rust-gpu": {
                 "build": {
-                    "debug": true
+                    "release": false
                 },
                 "install": {
                     "auto-install-rust-toolchain": true
@@ -188,7 +188,7 @@ mod test {
             }}}
         );
         let configs = Metadata::merge_configs(&json, std::path::Path::new("./")).unwrap();
-        assert_eq!(configs["build"]["debug"], serde_json::Value::Bool(true));
+        assert_eq!(configs["build"]["release"], serde_json::Value::Bool(false));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],
             serde_json::Value::Bool(true)
@@ -202,7 +202,7 @@ mod test {
             { "packages": [{
                 "metadata": { "rust-gpu": {
                     "build": {
-                        "debug": true
+                        "release": false
                     },
                     "install": {
                         "auto-install-rust-toolchain": true
@@ -212,7 +212,7 @@ mod test {
             }]}
         );
         let configs = Metadata::merge_configs(&json, marker.parent().unwrap()).unwrap();
-        assert_eq!(configs["build"]["debug"], serde_json::Value::Bool(true));
+        assert_eq!(configs["build"]["release"], serde_json::Value::Bool(false));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],
             serde_json::Value::Bool(true)

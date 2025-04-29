@@ -140,7 +140,7 @@ mod test {
             ],
         )
         .unwrap();
-        assert!(args.build_args.debug);
+        assert!(!args.build_args.spirv_builder.release);
         assert!(args.install.spirv_install.auto_install_rust_toolchain);
     }
 
@@ -151,7 +151,7 @@ mod test {
         file.write_all(
             [
                 "[package.metadata.rust-gpu.build]",
-                "debug = true",
+                "release = false",
                 "[package.metadata.rust-gpu.install]",
                 "auto-install-rust-toolchain = true",
             ]
@@ -161,7 +161,7 @@ mod test {
         .unwrap();
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
-        assert!(args.build_args.debug);
+        assert!(!args.build_args.spirv_builder.release);
         assert!(args.install.spirv_install.auto_install_rust_toolchain);
     }
 
@@ -225,7 +225,7 @@ mod test {
         file.write_all(
             [
                 "[package.metadata.rust-gpu.build]",
-                "capability = [\"AtomicStorage\", \"Matrix\"]",
+                "capabilities = [\"AtomicStorage\", \"Matrix\"]",
             ]
             .join("\n")
             .as_bytes(),
@@ -234,10 +234,10 @@ mod test {
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
         assert_eq!(
-            args.build_args.capability,
+            args.build_args.spirv_builder.capabilities,
             vec![
-                spirv_builder_cli::spirv::Capability::AtomicStorage,
-                spirv_builder_cli::spirv::Capability::Matrix
+                spirv_builder::Capability::AtomicStorage,
+                spirv_builder::Capability::Matrix
             ]
         );
     }

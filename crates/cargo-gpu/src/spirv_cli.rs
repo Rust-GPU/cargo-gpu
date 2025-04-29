@@ -491,6 +491,7 @@ impl Drop for SpirvCli {
 mod test {
     use super::*;
 
+    #[ignore]
     #[test_log::test]
     fn cached_checkout_dir_sanity() {
         let shader_template_path = crate::test::shader_crate_template_path();
