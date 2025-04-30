@@ -4,6 +4,7 @@
 
 use crate::args::BuildArgs;
 use crate::linkage::Linkage;
+use crate::lockfile::LockfileMismatchHandler;
 use crate::{install::Install, target_spec_dir};
 use anyhow::Context as _;
 use spirv_builder::ModuleResult;
@@ -26,6 +27,14 @@ impl Build {
     #[expect(clippy::too_many_lines, reason = "It's not too confusing")]
     pub fn run(&mut self) -> anyhow::Result<()> {
         let (rustc_codegen_spirv_location, toolchain_channel) = self.install.run()?;
+
+        let _lockfile_mismatch_handler = LockfileMismatchHandler::new(
+            &self.install.spirv_install.shader_crate,
+            &toolchain_channel,
+            self.install
+                .spirv_install
+                .force_overwrite_lockfiles_v4_to_v3,
+        )?;
 
         let builder = &mut self.build_args.spirv_builder;
         builder.rustc_codegen_spirv_location = Some(rustc_codegen_spirv_location);

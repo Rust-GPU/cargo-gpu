@@ -13,7 +13,7 @@ exclude = [
 resolver = "2"
 
 [workspace.dependencies]
-spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu.git", rev = "e040ab9c296f2c0f1555051d4b574969329715ec", default-features = false }
+spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu.git", rev = "eca83dfbfc0aae5c72f1e3f53081f5ccb72c27a4", default-features = false }
 anyhow = "1.0.94"
 clap = { version = "4.5.37", features = ["derive"] }
 crossterm = "0.28.1"
@@ -27,6 +27,7 @@ toml = "0.8.19"
 tempdir = "0.3.7"
 test-log = "0.2.16"
 cargo_metadata = "0.19.2"
+semver = "1.0.26"
 
 [workspace.lints.rust]
 missing_docs = "warn"

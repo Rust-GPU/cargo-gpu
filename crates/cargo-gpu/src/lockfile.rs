@@ -2,11 +2,13 @@
 //! Then ensure that the relevant Rust toolchain and components are installed.
 
 use anyhow::Context as _;
+use semver::Version;
+use spirv_builder::query_rustc_version;
 use std::io::Write as _;
 
 /// `Cargo.lock` manifest version 4 became the default in Rust 1.83.0. Conflicting manifest
 /// versions between the workspace and the shader crate, can cause problems.
-const RUST_VERSION_THAT_USES_V4_CARGO_LOCKS: &str = "1.83.0";
+const RUST_VERSION_THAT_USES_V4_CARGO_LOCKS: Version = Version::new(1, 83, 0);
 
 /// Cargo dependency for `spirv-builder` and the rust toolchain channel.
 #[derive(Debug, Clone)]
@@ -58,12 +60,8 @@ impl LockfileMismatchHandler {
         is_force_overwrite_lockfiles_v4_to_v3: bool,
     ) -> anyhow::Result<Option<std::path::PathBuf>> {
         log::debug!("Ensuring no v3/v4 `Cargo.lock` conflicts from workspace Rust...");
-        let workspace_rust_version =
-            Self::get_rustc_version(None).context("reading rustc version")?;
-        if version_check::Version::at_least(
-            &workspace_rust_version,
-            RUST_VERSION_THAT_USES_V4_CARGO_LOCKS,
-        ) {
+        let workspace_rust_version = query_rustc_version(None).context("reading rustc version")?;
+        if workspace_rust_version >= RUST_VERSION_THAT_USES_V4_CARGO_LOCKS {
             log::debug!(
                 "user's Rust is v{workspace_rust_version}, so no v3/v4 conflicts possible."
             );
@@ -91,11 +89,8 @@ impl LockfileMismatchHandler {
     ) -> anyhow::Result<Option<std::path::PathBuf>> {
         log::debug!("Ensuring no v3/v4 `Cargo.lock` conflicts from shader's Rust...");
         let shader_rust_version =
-            Self::get_rustc_version(Some(channel)).context("getting rustc version")?;
-        if version_check::Version::at_least(
-            &shader_rust_version,
-            RUST_VERSION_THAT_USES_V4_CARGO_LOCKS,
-        ) {
+            query_rustc_version(Some(channel)).context("getting rustc version")?;
+        if shader_rust_version >= RUST_VERSION_THAT_USES_V4_CARGO_LOCKS {
             log::debug!("shader's Rust is v{shader_rust_version}, so no v3/v4 conflicts possible.");
             return Ok(None);
         }
@@ -265,25 +260,6 @@ impl LockfileMismatchHandler {
             "
         );
         std::process::exit(1);
-    }
-
-    /// Get the version of `rustc`.
-    fn get_rustc_version(maybe_toolchain: Option<&str>) -> anyhow::Result<version_check::Version> {
-        let mut maybe_current_env_toolchain: Option<std::ffi::OsString> = None;
-        if let Some(toolchain) = maybe_toolchain {
-            maybe_current_env_toolchain = std::env::var_os("RUSTUP_TOOLCHAIN");
-            std::env::set_var("RUSTUP_TOOLCHAIN", toolchain);
-        }
-
-        let Some(version) = version_check::Version::read() else {
-            anyhow::bail!("Couldn't get `rustc --version`");
-        };
-
-        if let Some(current_env_toolchain) = maybe_current_env_toolchain {
-            std::env::set_var("RUSTUP_TOOLCHAIN", current_env_toolchain);
-        }
-
-        Ok(version)
     }
 }
 
