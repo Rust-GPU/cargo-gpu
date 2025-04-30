@@ -16,11 +16,9 @@ resolver = "2"
 spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu.git", rev = "e040ab9c296f2c0f1555051d4b574969329715ec", default-features = false }
 anyhow = "1.0.94"
 clap = { version = "4.5.37", features = ["derive"] }
-chrono = { version = "0.4.38", default-features = false, features = ["std"] }
 crossterm = "0.28.1"
 directories = "5.0.1"
 env_logger = "0.10"
-http = "1.2.0"
 log = "0.4"
 relative-path = "1.9.3"
 serde = { version = "1.0.214", features = ["derive"] }
