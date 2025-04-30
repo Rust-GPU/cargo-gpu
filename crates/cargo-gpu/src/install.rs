@@ -1,14 +1,14 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
 
-use anyhow::Context as _;
-use std::io::Write as _;
-use std::path::Path;
-
 use crate::args::InstallArgs;
 use crate::spirv_source::{
     get_channel_from_rustc_codegen_spirv_build_script, get_package_from_crate,
 };
 use crate::{cache_dir, spirv_source::SpirvSource, target_spec_dir};
+use anyhow::Context as _;
+use log::trace;
+use std::io::Write as _;
+use std::path::Path;
 
 /// Metadata for the compile targets supported by `rust-gpu`
 const TARGET_SPECS: &[(&str, &str)] = &[
@@ -85,7 +85,17 @@ pub struct Install {
 impl Install {
     /// Create the `rustc_codegen_spirv_dummy` crate that depends on `rustc_codegen_spirv`
     fn write_source_files(source: &SpirvSource, checkout: &Path) -> anyhow::Result<()> {
+        // skip writing a dummy project if we use a local rust-gpu checkout
+        if matches!(source, SpirvSource::Path { .. }) {
+            return Ok(());
+        }
+        log::debug!(
+            "writing `rustc_codegen_spirv_dummy` source files into '{}'",
+            checkout.display()
+        );
+
         {
+            trace!("writing dummy main.rs");
             let main = "fn main() {}";
             let src = checkout.join("src");
             std::fs::create_dir_all(&src).context("creating directory for 'src'")?;
@@ -93,13 +103,14 @@ impl Install {
         };
 
         {
+            trace!("writing dummy Cargo.toml");
             let version_spec = match &source {
                 SpirvSource::CratesIO(version) => {
                     format!("version = \"{}\"", version)
                 }
                 SpirvSource::Git { url, rev } => format!("git = \"{url}\"\nrev = \"{rev}\""),
                 SpirvSource::Path {
-                    rust_gpu_path,
+                    rust_gpu_repo_root: rust_gpu_path,
                     version,
                 } => {
                     let mut new_path = rust_gpu_path.to_owned();
@@ -157,6 +168,7 @@ package = "rustc_codegen_spirv"
             self.spirv_install.spirv_builder_source.as_deref(),
             self.spirv_install.spirv_builder_version.as_deref(),
         )?;
+        let source_is_path = matches!(source, SpirvSource::Path { .. });
         let checkout = source.install_dir()?;
 
         let dylib_filename = format!(
@@ -164,21 +176,29 @@ package = "rustc_codegen_spirv"
             std::env::consts::DLL_PREFIX,
             std::env::consts::DLL_SUFFIX
         );
-        let dest_dylib_path = checkout.join(&dylib_filename);
-        if dest_dylib_path.is_file() {
-            log::info!(
-                "cargo-gpu artifacts are already installed in '{}'",
-                checkout.display()
-            );
+
+        let dest_dylib_path;
+        if source_is_path {
+            dest_dylib_path = checkout
+                .join("target")
+                .join("release")
+                .join(&dylib_filename);
+        } else {
+            dest_dylib_path = checkout.join(&dylib_filename);
+            if dest_dylib_path.is_file() {
+                log::info!(
+                    "cargo-gpu artifacts are already installed in '{}'",
+                    checkout.display()
+                );
+            }
         }
 
-        if dest_dylib_path.is_file() && !self.spirv_install.force_spirv_cli_rebuild {
+        if !source_is_path
+            && dest_dylib_path.is_file()
+            && !self.spirv_install.force_spirv_cli_rebuild
+        {
             log::info!("...and so we are aborting the install step.");
         } else {
-            log::debug!(
-                "writing `rustc_codegen_spirv_dummy` source files into '{}'",
-                checkout.display()
-            );
             Self::write_source_files(&source, &checkout).context("writing source files")?;
 
             log::debug!("resolving toolchain version to use");
@@ -196,10 +216,6 @@ package = "rustc_codegen_spirv"
             )
             .context("ensuring toolchain and components exist")?;
 
-            log::debug!("write_target_spec_files");
-            self.write_target_spec_files()
-                .context("writing target spec files")?;
-
             crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source,);
 
             let mut build_command = std::process::Command::new("cargo");
@@ -208,6 +224,9 @@ package = "rustc_codegen_spirv"
                 .arg(format!("+{}", toolchain_channel))
                 .args(["build", "--release"])
                 .env_remove("RUSTC");
+            if source_is_path {
+                build_command.args(["-p", "rustc_codegen_spirv", "--lib"]);
+            }
 
             log::debug!("building artifacts with `{build_command:?}`");
 
@@ -231,11 +250,18 @@ package = "rustc_codegen_spirv"
                 .join(&dylib_filename);
             if dylib_path.is_file() {
                 log::info!("successfully built {}", dylib_path.display());
-                std::fs::rename(&dylib_path, &dest_dylib_path).context("renaming dylib path")?;
+                if !source_is_path {
+                    std::fs::rename(&dylib_path, &dest_dylib_path)
+                        .context("renaming dylib path")?;
+                }
             } else {
                 log::error!("could not find {}", dylib_path.display());
                 anyhow::bail!("`rustc_codegen_spirv` build failed");
             }
+
+            log::debug!("write_target_spec_files");
+            self.write_target_spec_files()
+                .context("writing target spec files")?;
         }
 
         self.spirv_install.dylib_path = dest_dylib_path;

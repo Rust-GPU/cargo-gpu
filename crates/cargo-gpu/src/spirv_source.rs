@@ -5,7 +5,7 @@
 //! From there we can look at the source code to get the required Rust toolchain.
 
 use anyhow::{anyhow, Context as _};
-use cargo_metadata::camino::Utf8PathBuf;
+use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::semver::Version;
 use cargo_metadata::{MetadataCommand, Package};
 use std::fs;
@@ -41,7 +41,7 @@ pub enum SpirvSource {
     /// then the source of `rust-gpu` is `Path`.
     Path {
         /// File path of rust-gpu repository
-        rust_gpu_path: Utf8PathBuf,
+        rust_gpu_repo_root: Utf8PathBuf,
         /// Version of specified rust-gpu repository
         version: Version,
     },
@@ -57,9 +57,9 @@ impl core::fmt::Display for SpirvSource {
             Self::CratesIO(version) => version.fmt(f),
             Self::Git { url, rev } => f.write_str(&format!("{url}+{rev}")),
             Self::Path {
-                rust_gpu_path,
+                rust_gpu_repo_root,
                 version,
-            } => f.write_str(&format!("{rust_gpu_path}+{version}")),
+            } => f.write_str(&format!("{rust_gpu_repo_root}+{version}")),
         }
     }
 }
@@ -102,10 +102,17 @@ impl SpirvSource {
     /// It needs to be dynamically created because an end-user might want to swap out the source,
     /// maybe using their own fork for example.
     pub fn install_dir(&self) -> anyhow::Result<PathBuf> {
-        let dir = crate::to_dirname(self.to_string().as_ref());
-        Ok(crate::cache_dir()?
-            .join("rustc_backend_spirv_install")
-            .join(dir))
+        match self {
+            SpirvSource::Path {
+                rust_gpu_repo_root, ..
+            } => Ok(rust_gpu_repo_root.as_std_path().to_owned()),
+            SpirvSource::CratesIO { .. } | SpirvSource::Git { .. } => {
+                let dir = crate::to_dirname(self.to_string().as_ref());
+                Ok(crate::cache_dir()?
+                    .join("rustc_backend_spirv_install")
+                    .join(dir))
+            }
+        }
     }
 
     /// Parse a string like:
@@ -144,18 +151,19 @@ impl SpirvSource {
                 }
             }
             None => {
-                let rust_gpu_path = spirv_std_package
+                let rust_gpu_repo_root = spirv_std_package
                     .manifest_path // rust-gpu/crates/spirv-std/Cargo.toml
-                    .parent()
-                    .unwrap() // rust-gpu/crates/spirv-std
-                    .parent()
-                    .unwrap() // rust-gpu/crates
-                    .parent()
-                    .unwrap() // rust-gpu
+                    .parent() // rust-gpu/crates/spirv-std
+                    .and_then(Utf8Path::parent) // rust-gpu/crates
+                    .and_then(Utf8Path::parent) // rust-gpu
+                    .context("selecting rust-gpu workspace root dir in local path")?
                     .to_owned();
+                if !rust_gpu_repo_root.is_dir() {
+                    anyhow::bail!("path {rust_gpu_repo_root} is not a directory");
+                }
                 let version = spirv_std_package.version.clone();
                 Self::Path {
-                    rust_gpu_path,
+                    rust_gpu_repo_root,
                     version,
                 }
             }
