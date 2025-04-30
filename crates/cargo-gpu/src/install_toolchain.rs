@@ -1,4 +1,6 @@
-use anyhow::Context;
+//! toolchain installation logic
+
+use anyhow::Context as _;
 
 /// Use `rustup` to install the toolchain and components, if not already installed.
 ///
@@ -22,11 +24,11 @@ pub fn ensure_toolchain_and_components_exist(
     let string_toolchain_list = String::from_utf8_lossy(&output_toolchain_list.stdout);
     if string_toolchain_list
         .split_whitespace()
-        .any(|toolchain| toolchain.starts_with(&channel))
+        .any(|toolchain| toolchain.starts_with(channel))
     {
-        log::debug!("toolchain {} is already installed", channel);
+        log::debug!("toolchain {channel} is already installed");
     } else {
-        let message = format!("Rust {} with `rustup`", channel);
+        let message = format!("Rust {channel} with `rustup`");
         get_consent_for_toolchain_install(
             format!("Install {message}").as_ref(),
             skip_toolchain_install_consent,
@@ -35,7 +37,7 @@ pub fn ensure_toolchain_and_components_exist(
 
         let output_toolchain_add = std::process::Command::new("rustup")
             .args(["toolchain", "add"])
-            .arg(&channel)
+            .arg(channel)
             .stdout(std::process::Stdio::inherit())
             .stderr(std::process::Stdio::inherit())
             .output()
@@ -49,7 +51,7 @@ pub fn ensure_toolchain_and_components_exist(
     // Check for the required components
     let output_component_list = std::process::Command::new("rustup")
         .args(["component", "list", "--toolchain"])
-        .arg(&channel)
+        .arg(channel)
         .output()
         .context("getting toolchain list")?;
     anyhow::ensure!(
@@ -78,7 +80,7 @@ pub fn ensure_toolchain_and_components_exist(
 
         let output_component_add = std::process::Command::new("rustup")
             .args(["component", "add", "--toolchain"])
-            .arg(&channel)
+            .arg(channel)
             .args(["rust-src", "rustc-dev", "llvm-tools"])
             .stdout(std::process::Stdio::inherit())
             .stderr(std::process::Stdio::inherit())
@@ -126,6 +128,7 @@ fn get_consent_for_toolchain_install(
         Ok(())
     } else {
         crate::user_output!("Exiting...\n");
+        #[expect(clippy::exit, reason = "user requested abort")]
         std::process::exit(0);
     }
 }

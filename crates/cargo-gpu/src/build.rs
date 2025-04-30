@@ -24,7 +24,6 @@ pub struct Build {
 
 impl Build {
     /// Entrypoint
-    #[expect(clippy::too_many_lines, reason = "It's not too confusing")]
     pub fn run(&mut self) -> anyhow::Result<()> {
         let (rustc_codegen_spirv_location, toolchain_channel) = self.install.run()?;
 
@@ -76,7 +75,7 @@ impl Build {
 
         let shaders = match &result.module {
             ModuleResult::MultiModule(modules) => {
-                assert!(!modules.is_empty(), "No shader modules to compile");
+                anyhow::ensure!(!modules.is_empty(), "No shader modules were compiled");
                 modules.iter().collect::<Vec<_>>()
             }
             ModuleResult::SingleModule(filepath) => result
@@ -95,7 +94,7 @@ impl Build {
                         .context("Couldn't parse file name from shader module path")?,
                 );
                 log::debug!("copying {} to {}", filepath.display(), path.display());
-                std::fs::copy(&filepath, &path)?;
+                std::fs::copy(filepath, &path)?;
                 log::debug!(
                     "linkage of {} relative to {}",
                     path.display(),

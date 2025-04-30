@@ -40,7 +40,7 @@ impl LockfileMismatchHandler {
         let maybe_workspace_crate_lock =
             Self::ensure_shader_rust_version_doesnt_conflict_with_any_cargo_locks(
                 shader_crate_path,
-                &toolchain_channel,
+                toolchain_channel,
                 is_force_overwrite_lockfiles_v4_to_v3,
             )
             .context("ensure_shader_rust_version_doesnt_conflict_with_any_cargo_locks")?;

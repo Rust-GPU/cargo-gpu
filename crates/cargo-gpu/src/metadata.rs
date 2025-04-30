@@ -80,9 +80,9 @@ impl Metadata {
     /// Get any `rust-gpu` metadata set in the crate's `Cargo.toml`
     fn get_crate_metadata(
         json: &cargo_metadata::Metadata,
-        shader_crate_path: &std::path::Path,
+        path: &std::path::Path,
     ) -> anyhow::Result<Value> {
-        let shader_crate_path = std::fs::canonicalize(shader_crate_path)?.join("Cargo.toml");
+        let shader_crate_path = std::fs::canonicalize(path)?.join("Cargo.toml");
 
         for package in &json.packages {
             let manifest_path = std::fs::canonicalize(package.manifest_path.as_std_path())?;
@@ -99,6 +99,7 @@ impl Metadata {
         Ok(serde_json::json!({}))
     }
 
+    /// Get `rust-gpu` value from some metadata
     fn get_rust_gpu_from_metadata(metadata: &Value) -> Value {
         Self::keys_to_snake_case(
             metadata
@@ -112,6 +113,7 @@ impl Metadata {
     ///
     /// Detection of keys for serde deserialization must match the case in the Rust structs.
     /// However clap defaults to detecting CLI args in kebab case. So here we do the conversion.
+    #[expect(clippy::wildcard_enum_match_arm, reason = "we only want objects")]
     fn keys_to_snake_case(json: Value) -> Value {
         match json {
             Value::Object(object) => Value::Object(
@@ -120,7 +122,7 @@ impl Metadata {
                     .map(|(key, value)| (key.replace('-', "_"), Self::keys_to_snake_case(value)))
                     .collect(),
             ),
-            e => e,
+            other => other,
         }
     }
 }
@@ -182,7 +184,7 @@ mod test {
         let cargo_gpu = metadata
             .packages
             .iter_mut()
-            .find(|p| p.name.contains("cargo-gpu"))
+            .find(|package| package.name.contains("cargo-gpu"))
             .unwrap();
         cargo_gpu.metadata = serde_json::json!({
             "rust-gpu": {

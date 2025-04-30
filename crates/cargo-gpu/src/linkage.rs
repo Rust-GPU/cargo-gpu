@@ -27,10 +27,4 @@ impl Linkage {
             entry_point: entry_point.as_ref().to_owned(),
         }
     }
-
-    /// The entry point function name, without the fully qualified mod path
-    #[expect(clippy::unwrap_used, reason = "unreachable")]
-    pub fn fn_name(&self) -> &str {
-        self.entry_point.split("::").last().unwrap()
-    }
 }

@@ -43,7 +43,7 @@ impl Install {
             trace!("writing dummy Cargo.toml");
             let version_spec = match &source {
                 SpirvSource::CratesIO(version) => {
-                    format!("version = \"{}\"", version)
+                    format!("version = \"{version}\"")
                 }
                 SpirvSource::Git { url, rev } => format!("git = \"{url}\"\nrev = \"{rev}\""),
                 SpirvSource::Path {
@@ -52,7 +52,7 @@ impl Install {
                 } => {
                     let mut new_path = rust_gpu_path.to_owned();
                     new_path.push("crates/spirv-builder");
-                    format!("path = \"{new_path}\"\nversion = \"{}\"", version)
+                    format!("path = \"{new_path}\"\nversion = \"{version}\"")
                 }
             };
             let cargo_toml = format!(
@@ -90,6 +90,7 @@ package = "rustc_codegen_spirv"
     }
 
     /// Install the binary pair and return the `(dylib_path, toolchain_channel)`.
+    #[expect(clippy::too_many_lines, reason = "it's fine")]
     pub fn run(&mut self) -> anyhow::Result<(PathBuf, String)> {
         // Ensure the cache dir exists
         let cache_dir = cache_dir()?;
@@ -164,7 +165,7 @@ package = "rustc_codegen_spirv"
             let mut build_command = std::process::Command::new("cargo");
             build_command
                 .current_dir(&checkout)
-                .arg(format!("+{}", toolchain_channel))
+                .arg(format!("+{toolchain_channel}"))
                 .args(["build", "--release"])
                 .env_remove("RUSTC");
             if source_is_path {
@@ -207,7 +208,7 @@ package = "rustc_codegen_spirv"
                 .context("writing target spec files")?;
         }
 
-        self.spirv_install.dylib_path = dest_dylib_path.clone();
+        self.spirv_install.dylib_path.clone_from(&dest_dylib_path);
         Ok((dest_dylib_path, toolchain_channel))
     }
 }
