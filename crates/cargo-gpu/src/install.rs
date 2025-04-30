@@ -161,8 +161,6 @@ package = "rustc_codegen_spirv"
             format!("could not create cache directory '{}'", cache_dir.display())
         })?;
 
-        // TODO what about lockfiles?
-        // let spirv_version = self.spirv_cli().context("running spirv cli")?;
         let source = SpirvSource::new(
             &self.spirv_install.shader_crate,
             self.spirv_install.spirv_builder_source.as_deref(),
@@ -216,8 +214,11 @@ package = "rustc_codegen_spirv"
             )
             .context("ensuring toolchain and components exist")?;
 
-            crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source,);
+            // to prevent unsupported version errors when using older toolchains
+            log::debug!("remove Cargo.lock");
+            std::fs::remove_file(checkout.join("Cargo.lock")).context("remove Cargo.lock")?;
 
+            crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source,);
             let mut build_command = std::process::Command::new("cargo");
             build_command
                 .current_dir(&checkout)
