@@ -7,72 +7,9 @@ use crate::spirv_source::{
 use crate::{cache_dir, spirv_source::SpirvSource, target_spec_dir};
 use anyhow::Context as _;
 use log::trace;
+use spirv_builder::TARGET_SPECS;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-
-/// Metadata for the compile targets supported by `rust-gpu`
-const TARGET_SPECS: &[(&str, &str)] = &[
-    (
-        "spirv-unknown-opengl4.0.json",
-        include_str!("../target-specs/spirv-unknown-opengl4.0.json"),
-    ),
-    (
-        "spirv-unknown-opengl4.1.json",
-        include_str!("../target-specs/spirv-unknown-opengl4.1.json"),
-    ),
-    (
-        "spirv-unknown-opengl4.2.json",
-        include_str!("../target-specs/spirv-unknown-opengl4.2.json"),
-    ),
-    (
-        "spirv-unknown-opengl4.3.json",
-        include_str!("../target-specs/spirv-unknown-opengl4.3.json"),
-    ),
-    (
-        "spirv-unknown-opengl4.5.json",
-        include_str!("../target-specs/spirv-unknown-opengl4.5.json"),
-    ),
-    (
-        "spirv-unknown-spv1.0.json",
-        include_str!("../target-specs/spirv-unknown-spv1.0.json"),
-    ),
-    (
-        "spirv-unknown-spv1.1.json",
-        include_str!("../target-specs/spirv-unknown-spv1.1.json"),
-    ),
-    (
-        "spirv-unknown-spv1.2.json",
-        include_str!("../target-specs/spirv-unknown-spv1.2.json"),
-    ),
-    (
-        "spirv-unknown-spv1.3.json",
-        include_str!("../target-specs/spirv-unknown-spv1.3.json"),
-    ),
-    (
-        "spirv-unknown-spv1.4.json",
-        include_str!("../target-specs/spirv-unknown-spv1.4.json"),
-    ),
-    (
-        "spirv-unknown-spv1.5.json",
-        include_str!("../target-specs/spirv-unknown-spv1.5.json"),
-    ),
-    (
-        "spirv-unknown-vulkan1.0.json",
-        include_str!("../target-specs/spirv-unknown-vulkan1.0.json"),
-    ),
-    (
-        "spirv-unknown-vulkan1.1.json",
-        include_str!("../target-specs/spirv-unknown-vulkan1.1.json"),
-    ),
-    (
-        "spirv-unknown-vulkan1.1spv1.4.json",
-        include_str!("../target-specs/spirv-unknown-vulkan1.1spv1.4.json"),
-    ),
-    (
-        "spirv-unknown-vulkan1.2.json",
-        include_str!("../target-specs/spirv-unknown-vulkan1.2.json"),
-    ),
-];
 
 /// `cargo gpu install`
 #[derive(clap::Parser, Debug, serde::Deserialize, serde::Serialize)]

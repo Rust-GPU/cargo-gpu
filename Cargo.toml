@@ -13,7 +13,7 @@ exclude = [
 resolver = "2"
 
 [workspace.dependencies]
-spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu.git", rev = "b619665a24eba00cc3d2d4b15af6d0fc356efef9", default-features = false }
+spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu.git", rev = "e040ab9c296f2c0f1555051d4b574969329715ec", default-features = false }
 anyhow = "1.0.94"
 clap = { version = "4.5.37", features = ["derive"] }
 chrono = { version = "0.4.38", default-features = false, features = ["std"] }
