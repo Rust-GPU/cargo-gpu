@@ -2,12 +2,12 @@
 #![allow(clippy::unwrap_used, reason = "this is basically a test")]
 //! `cargo gpu build`, analogous to `cargo build`
 
-use anyhow::Context as _;
-use std::io::Write as _;
-
 use crate::args::BuildArgs;
-use crate::linkage::{Linkage, ShaderModule};
+use crate::linkage::Linkage;
 use crate::{install::Install, target_spec_dir};
+use anyhow::Context as _;
+use spirv_builder::ModuleResult;
+use std::io::Write as _;
 
 /// `cargo build` subcommands
 #[derive(clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
@@ -25,7 +25,16 @@ impl Build {
     /// Entrypoint
     #[expect(clippy::too_many_lines, reason = "It's not too confusing")]
     pub fn run(&mut self) -> anyhow::Result<()> {
-        self.install.run()?;
+        let (rustc_codegen_spirv_location, toolchain_channel) = self.install.run()?;
+
+        let builder = &mut self.build_args.spirv_builder;
+        builder.rustc_codegen_spirv_location = Some(rustc_codegen_spirv_location);
+        builder.toolchain_overwrite = Some(toolchain_channel);
+        builder.path_to_crate = Some(self.install.spirv_install.shader_crate.clone());
+        builder.path_to_target_spec = Some(target_spec_dir()?.join(format!(
+            "{}.json",
+            builder.target.as_ref().context("expect target to be set")?
+        )));
 
         // Ensure the shader output dir exists
         log::debug!(
@@ -48,95 +57,57 @@ impl Build {
         );
 
         if !self.build_args.watch {
-            self.build_args.spirv_builder.target = Some(
-                target_spec_dir()?
-                    .join(format!(
-                        "{}.json",
-                        self.build_args
-                            .spirv_builder
-                            .target
-                            .as_ref()
-                            .context("expect target to be set")?
-                    ))
-                    .display()
-                    .to_string(),
-            );
-        }
-
-        let args_as_json = serde_json::json!({
-            "install": self.install.spirv_install,
-            "build": self.build_args
-        });
-        let arg = serde_json::to_string_pretty(&args_as_json)?;
-        log::info!("using spirv-builder-cli arg: {arg}");
-
-        if !self.build_args.watch {
             crate::user_output!(
-                "Running `spirv-builder-cli` to compile shader at {}...\n",
+                "Compiling shaders at {}...\n",
                 self.install.spirv_install.shader_crate.display()
             );
         }
 
-        // TODO Call spirv-builder-cli to compile the shaders.
-        let output = std::process::Command::new("TODO_DUMMY_PLEASE_CHANGE_ME")
-            .arg(arg)
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .output()?;
-        anyhow::ensure!(output.status.success(), "build failed");
+        let result = self.build_args.spirv_builder.build()?;
 
-        let spirv_manifest = self.build_args.output_dir.join("spirv-manifest.json");
-        if spirv_manifest.is_file() {
-            log::debug!(
-                "successfully built shaders, raw manifest is at '{}'",
-                spirv_manifest.display()
-            );
-        } else {
-            log::error!("missing raw manifest '{}'", spirv_manifest.display());
-            anyhow::bail!("missing raw manifest");
-        }
-
-        let shaders: Vec<ShaderModule> =
-            serde_json::from_reader(std::fs::File::open(&spirv_manifest)?)?;
-
+        let shaders = match &result.module {
+            ModuleResult::MultiModule(modules) => {
+                assert!(!modules.is_empty(), "No shader modules to compile");
+                modules.iter().collect::<Vec<_>>()
+            }
+            ModuleResult::SingleModule(filepath) => result
+                .entry_points
+                .iter()
+                .map(|entry| (entry, filepath))
+                .collect::<Vec<_>>(),
+        };
         let mut linkage: Vec<Linkage> = shaders
             .into_iter()
-            .map(
-                |ShaderModule {
-                     entry,
-                     path: filepath,
-                 }|
-                 -> anyhow::Result<Linkage> {
-                    use relative_path::PathExt as _;
-                    let path = self.build_args.output_dir.join(
-                        filepath
-                            .file_name()
-                            .context("Couldn't parse file name from shader module path")?,
-                    );
-                    log::debug!("copying {} to {}", filepath.display(), path.display());
-                    std::fs::copy(&filepath, &path)?;
-                    log::debug!(
-                        "linkage of {} relative to {}",
-                        path.display(),
-                        self.install.spirv_install.shader_crate.display()
-                    );
-                    let spv_path = path
-                        .relative_to(&self.install.spirv_install.shader_crate)
-                        .map_or(path, |path_relative_to_shader_crate| {
-                            path_relative_to_shader_crate.to_path("")
-                        });
-                    Ok(Linkage::new(entry, spv_path))
-                },
-            )
+            .map(|(entry, filepath)| -> anyhow::Result<Linkage> {
+                use relative_path::PathExt as _;
+                let path = self.build_args.output_dir.join(
+                    filepath
+                        .file_name()
+                        .context("Couldn't parse file name from shader module path")?,
+                );
+                log::debug!("copying {} to {}", filepath.display(), path.display());
+                std::fs::copy(&filepath, &path)?;
+                log::debug!(
+                    "linkage of {} relative to {}",
+                    path.display(),
+                    self.install.spirv_install.shader_crate.display()
+                );
+                let spv_path = path
+                    .relative_to(&self.install.spirv_install.shader_crate)
+                    .map_or(path, |path_relative_to_shader_crate| {
+                        path_relative_to_shader_crate.to_path("")
+                    });
+                Ok(Linkage::new(entry, spv_path))
+            })
             .collect::<anyhow::Result<Vec<Linkage>>>()?;
+        // Sort the contents so the output is deterministic
+        linkage.sort();
 
         // Write the shader manifest json file
         let manifest_path = self
             .build_args
             .output_dir
             .join(&self.build_args.manifest_file);
-        // Sort the contents so the output is deterministic
-        linkage.sort();
         let json = serde_json::to_string_pretty(&linkage)?;
         let mut file = std::fs::File::create(&manifest_path).with_context(|| {
             format!(
@@ -152,14 +123,6 @@ impl Build {
         })?;
 
         log::info!("wrote manifest to '{}'", manifest_path.display());
-
-        if spirv_manifest.is_file() {
-            log::debug!(
-                "removing spirv-manifest.json file '{}'",
-                spirv_manifest.display()
-            );
-            std::fs::remove_file(spirv_manifest)?;
-        }
         Ok(())
     }
 }

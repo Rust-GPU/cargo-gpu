@@ -8,7 +8,7 @@ use crate::{cache_dir, spirv_source::SpirvSource, target_spec_dir};
 use anyhow::Context as _;
 use log::trace;
 use std::io::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Metadata for the compile targets supported by `rust-gpu`
 const TARGET_SPECS: &[(&str, &str)] = &[
@@ -152,8 +152,8 @@ package = "rustc_codegen_spirv"
         Ok(())
     }
 
-    /// Install the binary pair and return the paths, (dylib, cli).
-    pub fn run(&mut self) -> anyhow::Result<()> {
+    /// Install the binary pair and return the `(dylib_path, toolchain_channel)`.
+    pub fn run(&mut self) -> anyhow::Result<(PathBuf, String)> {
         // Ensure the cache dir exists
         let cache_dir = cache_dir()?;
         log::info!("cache directory is '{}'", cache_dir.display());
@@ -191,22 +191,25 @@ package = "rustc_codegen_spirv"
             }
         }
 
-        if !source_is_path
+        let skip_rebuild = !source_is_path
             && dest_dylib_path.is_file()
-            && !self.spirv_install.force_spirv_cli_rebuild
-        {
+            && !self.spirv_install.force_spirv_cli_rebuild;
+        if skip_rebuild {
             log::info!("...and so we are aborting the install step.");
         } else {
             Self::write_source_files(&source, &checkout).context("writing source files")?;
+        }
 
-            log::debug!("resolving toolchain version to use");
-            let rustc_codegen_spirv = get_package_from_crate(&checkout, "rustc_codegen_spirv")
-                .context("get `rustc_codegen_spirv` metadata")?;
-            let toolchain_channel =
-                get_channel_from_rustc_codegen_spirv_build_script(&rustc_codegen_spirv)
-                    .context("read toolchain from `rustc_codegen_spirv`'s build.rs")?;
-            log::info!("selected toolchain channel `{toolchain_channel:?}`");
+        // TODO cache toolchain channel in a file?
+        log::debug!("resolving toolchain version to use");
+        let rustc_codegen_spirv = get_package_from_crate(&checkout, "rustc_codegen_spirv")
+            .context("get `rustc_codegen_spirv` metadata")?;
+        let toolchain_channel =
+            get_channel_from_rustc_codegen_spirv_build_script(&rustc_codegen_spirv)
+                .context("read toolchain from `rustc_codegen_spirv`'s build.rs")?;
+        log::info!("selected toolchain channel `{toolchain_channel:?}`");
 
+        if !skip_rebuild {
             log::debug!("ensure_toolchain_and_components_exist");
             crate::install_toolchain::ensure_toolchain_and_components_exist(
                 &toolchain_channel,
@@ -265,7 +268,7 @@ package = "rustc_codegen_spirv"
                 .context("writing target spec files")?;
         }
 
-        self.spirv_install.dylib_path = dest_dylib_path;
-        Ok(())
+        self.spirv_install.dylib_path = dest_dylib_path.clone();
+        Ok((dest_dylib_path, toolchain_channel))
     }
 }

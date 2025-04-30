@@ -34,24 +34,3 @@ impl Linkage {
         self.entry_point.split("::").last().unwrap()
     }
 }
-
-/// A built shader entry-point, used in `spirv-builder-cli` to generate
-/// a `build-manifest.json` used by `cargo-gpu`.
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ShaderModule {
-    /// Name of the entry point for spirv and vulkan
-    pub entry: String,
-    /// File path to the entry point's source file
-    pub path: std::path::PathBuf,
-}
-
-impl ShaderModule {
-    /// Make a new `ShaderModule` from an entry point and source path
-    #[expect(clippy::impl_trait_in_params, reason = "just a struct new")]
-    pub fn new(entry: impl AsRef<str>, path: impl AsRef<std::path::Path>) -> Self {
-        Self {
-            entry: entry.as_ref().into(),
-            path: path.as_ref().into(),
-        }
-    }
-}
