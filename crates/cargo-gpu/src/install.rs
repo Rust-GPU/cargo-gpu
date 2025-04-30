@@ -218,8 +218,10 @@ package = "rustc_codegen_spirv"
             .context("ensuring toolchain and components exist")?;
 
             // to prevent unsupported version errors when using older toolchains
-            log::debug!("remove Cargo.lock");
-            std::fs::remove_file(checkout.join("Cargo.lock")).context("remove Cargo.lock")?;
+            if !source_is_path {
+                log::debug!("remove Cargo.lock");
+                std::fs::remove_file(checkout.join("Cargo.lock")).context("remove Cargo.lock")?;
+            }
 
             crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source,);
             let mut build_command = std::process::Command::new("cargo");
