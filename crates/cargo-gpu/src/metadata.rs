@@ -1,5 +1,6 @@
 //! Get config from the shader crate's `Cargo.toml` `[*.metadata.rust-gpu.*]`
 
+use cargo_metadata::MetadataCommand;
 use serde_json::Value;
 
 /// `Metadata` refers to the `[metadata.*]` section of `Cargo.toml` that `cargo` formally
@@ -15,37 +16,17 @@ impl Metadata {
     /// First we generate the CLI arg defaults as JSON. Then on top of those we merge any config
     /// from the workspace `Cargo.toml`, then on top of those we merge any config from the shader
     /// crate's `Cargo.toml`.
-    pub fn as_json(path: &std::path::PathBuf) -> anyhow::Result<serde_json::Value> {
+    pub fn as_json(path: &std::path::PathBuf) -> anyhow::Result<Value> {
         let cargo_json = Self::get_cargo_toml_as_json(path)?;
         let config = Self::merge_configs(&cargo_json, path)?;
         Ok(config)
     }
 
-    /// Convert JSON keys from kebab case to snake case. Eg: `a-b` to `a_b`.
-    ///
-    /// Detection of keys for serde deserialization must match the case in the Rust structs.
-    /// However clap defaults to detecting CLI args in kebab case. So here we do the conversion.
-    fn keys_to_snake_case(json: &mut serde_json::Value) {
-        let serde_json::Value::Object(object) = json else {
-            return;
-        };
-
-        *object = core::mem::take(object)
-            .into_iter()
-            .map(|(key, mut value)| {
-                if let serde_json::Value::Object(_) = value {
-                    Self::keys_to_snake_case(&mut value);
-                }
-                (key.replace('-', "_"), value)
-            })
-            .collect();
-    }
-
     /// Merge the various source of config: defaults, workspace and shader crate.
     fn merge_configs(
-        cargo_json: &serde_json::Value,
+        cargo_json: &cargo_metadata::Metadata,
         path: &std::path::Path,
-    ) -> anyhow::Result<serde_json::Value> {
+    ) -> anyhow::Result<Value> {
         let mut metadata = crate::config::Config::defaults_as_json()?;
         crate::config::Config::json_merge(
             &mut metadata,
@@ -85,74 +66,62 @@ impl Metadata {
     /// Convert a `Cargo.toml` to JSON
     //
     // TODO: reuse for getting the default `rust-gpu` source and toolchain.
-    fn get_cargo_toml_as_json(path: &std::path::PathBuf) -> anyhow::Result<serde_json::Value> {
-        let cargo_toml_path = path.join("Cargo.toml");
-        if !cargo_toml_path.exists() {
-            anyhow::bail!("{path:?} must be a shader crate directory");
-        }
-
-        log::debug!("Querying Cargo metadata for {cargo_toml_path:?}");
-        let output_cargo = std::process::Command::new("cargo")
-            .args([
-                "metadata",
-                "--no-deps",
-                "--manifest-path",
-                cargo_toml_path.display().to_string().as_ref(),
-            ])
-            .output()?;
-        anyhow::ensure!(
-            output_cargo.status.success(),
-            "could not run `cargo metadata` on {cargo_toml_path:?}"
-        );
-
-        Ok(serde_json::from_slice(&output_cargo.stdout)?)
+    fn get_cargo_toml_as_json(
+        path: &std::path::PathBuf,
+    ) -> anyhow::Result<cargo_metadata::Metadata> {
+        Ok(MetadataCommand::new().current_dir(path).exec()?)
     }
 
     /// Get any `rust-gpu` metadata set in the root workspace `Cargo.toml`
-    fn get_workspace_metadata(json: &serde_json::Value) -> serde_json::Value {
-        let empty_json_object = serde_json::json!({});
-        let mut metadata = json
-            .pointer("/metadata/rust-gpu")
-            .unwrap_or(&empty_json_object)
-            .clone();
-
-        Self::keys_to_snake_case(&mut metadata);
-        metadata.clone()
+    fn get_workspace_metadata(metadata: &cargo_metadata::Metadata) -> Value {
+        Self::get_rust_gpu_from_metadata(&metadata.workspace_metadata)
     }
 
     /// Get any `rust-gpu` metadata set in the crate's `Cargo.toml`
     fn get_crate_metadata(
-        json: &serde_json::Value,
-        path: &std::path::Path,
-    ) -> anyhow::Result<serde_json::Value> {
-        let empty_json_object = serde_json::json!({});
-        if let Some(serde_json::Value::Array(packages)) = json.pointer("/packages") {
-            for package in packages {
-                if let Some(serde_json::Value::String(manifest_path_dirty)) =
-                    package.pointer("/manifest_path")
-                {
-                    let mut shader_crate_path = std::fs::canonicalize(path)?
-                        .join("Cargo.toml")
-                        .display()
-                        .to_string();
+        json: &cargo_metadata::Metadata,
+        shader_crate_path: &std::path::Path,
+    ) -> anyhow::Result<Value> {
+        let shader_crate_path = std::fs::canonicalize(shader_crate_path)?.join("Cargo.toml");
 
-                    // Windows prefixs paths with `\\?\`
-                    shader_crate_path = shader_crate_path.replace(r"\\?\", "");
-                    let manifest_path = manifest_path_dirty.replace(r"\\?\", "");
-                    log::debug!("Matching shader crate path with manifest path: {shader_crate_path} == {manifest_path}?");
-                    if manifest_path == shader_crate_path {
-                        log::debug!("...matches! Getting metadata");
-                        let mut metadata = package
-                            .pointer("/metadata/rust-gpu")
-                            .unwrap_or(&empty_json_object)
-                            .clone();
-                        Self::keys_to_snake_case(&mut metadata);
-                        return Ok(metadata);
-                    }
-                }
+        for package in &json.packages {
+            let manifest_path = std::fs::canonicalize(package.manifest_path.as_std_path())?;
+            log::debug!(
+                "Matching shader crate path with manifest path: '{}' == '{}'?",
+                shader_crate_path.display(),
+                manifest_path.display()
+            );
+            if manifest_path == shader_crate_path {
+                log::debug!("...matches! Getting metadata");
+                return Ok(Self::get_rust_gpu_from_metadata(&package.metadata));
             }
         }
-        Ok(empty_json_object)
+        Ok(serde_json::json!({}))
+    }
+
+    fn get_rust_gpu_from_metadata(metadata: &Value) -> Value {
+        Self::keys_to_snake_case(
+            metadata
+                .pointer("/rust-gpu")
+                .cloned()
+                .unwrap_or(Value::Null),
+        )
+    }
+
+    /// Convert JSON keys from kebab case to snake case. Eg: `a-b` to `a_b`.
+    ///
+    /// Detection of keys for serde deserialization must match the case in the Rust structs.
+    /// However clap defaults to detecting CLI args in kebab case. So here we do the conversion.
+    fn keys_to_snake_case(json: Value) -> Value {
+        match json {
+            Value::Object(object) => Value::Object(
+                object
+                    .into_iter()
+                    .map(|(key, value)| (key.replace('-', "_"), Self::keys_to_snake_case(value)))
+                    .collect(),
+            ),
+            e => e,
+        }
     }
 }
 
@@ -163,59 +132,73 @@ impl Metadata {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::path::Path;
 
     #[test_log::test]
     fn generates_defaults() {
-        let json = serde_json::json!({});
-        let configs = Metadata::merge_configs(&json, std::path::Path::new("./")).unwrap();
-        assert_eq!(configs["build"]["release"], serde_json::Value::Bool(true));
+        let mut metadata = MetadataCommand::new()
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .exec()
+            .unwrap();
+        metadata.packages.first_mut().unwrap().metadata = serde_json::json!({});
+        let configs = Metadata::merge_configs(&metadata, Path::new("./")).unwrap();
+        assert_eq!(configs["build"]["release"], Value::Bool(true));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],
-            serde_json::Value::Bool(false)
+            Value::Bool(false)
         );
     }
 
     #[test_log::test]
     fn can_override_config_from_workspace_toml() {
-        let json = serde_json::json!(
-            { "metadata": { "rust-gpu": {
+        let mut metadata = MetadataCommand::new()
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .exec()
+            .unwrap();
+        metadata.workspace_metadata = serde_json::json!({
+            "rust-gpu": {
                 "build": {
                     "release": false
                 },
                 "install": {
                     "auto-install-rust-toolchain": true
                 }
-            }}}
-        );
-        let configs = Metadata::merge_configs(&json, std::path::Path::new("./")).unwrap();
-        assert_eq!(configs["build"]["release"], serde_json::Value::Bool(false));
+            }
+        });
+        let configs = Metadata::merge_configs(&metadata, Path::new("./")).unwrap();
+        assert_eq!(configs["build"]["release"], Value::Bool(false));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],
-            serde_json::Value::Bool(true)
+            Value::Bool(true)
         );
     }
 
     #[test_log::test]
     fn can_override_config_from_crate_toml() {
-        let marker = std::path::Path::new("./Cargo.toml");
-        let json = serde_json::json!(
-            { "packages": [{
-                "metadata": { "rust-gpu": {
-                    "build": {
-                        "release": false
-                    },
-                    "install": {
-                        "auto-install-rust-toolchain": true
-                    }
-                }},
-                "manifest_path": std::fs::canonicalize(marker).unwrap()
-            }]}
-        );
-        let configs = Metadata::merge_configs(&json, marker.parent().unwrap()).unwrap();
-        assert_eq!(configs["build"]["release"], serde_json::Value::Bool(false));
+        let mut metadata = MetadataCommand::new()
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .exec()
+            .unwrap();
+        let cargo_gpu = metadata
+            .packages
+            .iter_mut()
+            .find(|p| p.name.contains("cargo-gpu"))
+            .unwrap();
+        cargo_gpu.metadata = serde_json::json!({
+            "rust-gpu": {
+                "build": {
+                    "release": false
+                },
+                "install": {
+                    "auto-install-rust-toolchain": true
+                }
+            }
+        });
+        let configs = Metadata::merge_configs(&metadata, Path::new(".")).unwrap();
+        assert_eq!(configs["build"]["release"], Value::Bool(false));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],
-            serde_json::Value::Bool(true)
+            Value::Bool(true)
         );
     }
 }
