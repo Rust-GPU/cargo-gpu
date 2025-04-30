@@ -61,10 +61,11 @@ mod args;
 mod build;
 mod config;
 mod install;
+mod install_toolchain;
 mod linkage;
+mod lockfile;
 mod metadata;
 mod show;
-mod spirv_cli;
 mod spirv_source;
 
 /// Central function to write to the user.

@@ -84,10 +84,6 @@ manifest-file = "manifest.json"
 #    as a Git commit hash or a Git tag, therefore anything that `git checkout` can resolve.
 # spirv_builder_version = ""
 
-# Rust toolchain channel to use to build `spirv-builder`.
-# Eg: "nightly-2024-04-24"
-# rust_toolchain = ""
-
 # Whether to assume "yes" to the "Install Rust toolchain: [y/n]" prompt.
 auto-install-rust-toolchain = false
 # Force `spirv-builder-cli` and `rustc_codegen_spirv` to be rebuilt.

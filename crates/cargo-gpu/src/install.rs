@@ -5,7 +5,10 @@ use std::io::Write as _;
 use std::path::Path;
 
 use crate::args::InstallArgs;
-use crate::{cache_dir, spirv_cli::SpirvCli, spirv_source::SpirvSource, target_spec_dir};
+use crate::spirv_source::{
+    get_channel_from_rustc_codegen_spirv_build_script, get_package_from_crate,
+};
+use crate::{cache_dir, spirv_source::SpirvSource, target_spec_dir};
 
 /// Metadata for the compile targets supported by `rust-gpu`
 const TARGET_SPECS: &[(&str, &str)] = &[
@@ -80,20 +83,8 @@ pub struct Install {
 }
 
 impl Install {
-    /// Returns a [`SpirvCLI`] instance, responsible for ensuring the right version of the `rustc_codegen_spirv` crate.
-    fn spirv_cli(&self) -> anyhow::Result<SpirvCli> {
-        SpirvCli::new(
-            &self.spirv_install.shader_crate,
-            self.spirv_install.spirv_builder_source.clone(),
-            self.spirv_install.spirv_builder_version.clone(),
-            self.spirv_install.rust_toolchain.clone(),
-            self.spirv_install.auto_install_rust_toolchain,
-            self.spirv_install.force_overwrite_lockfiles_v4_to_v3,
-        )
-    }
-
     /// Create the `rustc_codegen_spirv_dummy` crate that depends on `rustc_codegen_spirv`
-    fn write_source_files(spirv_cli: &SpirvCli, checkout: &Path) -> anyhow::Result<()> {
+    fn write_source_files(source: &SpirvSource, checkout: &Path) -> anyhow::Result<()> {
         {
             let main = "fn main() {}";
             let src = checkout.join("src");
@@ -102,7 +93,7 @@ impl Install {
         };
 
         {
-            let version_spec = match &spirv_cli.source {
+            let version_spec = match &source {
                 SpirvSource::CratesIO(version) => {
                     format!("version = \"{}\"", version)
                 }
@@ -159,15 +150,14 @@ package = "rustc_codegen_spirv"
             format!("could not create cache directory '{}'", cache_dir.display())
         })?;
 
-        let spirv_version = self.spirv_cli().context("running spirv cli")?;
-        spirv_version
-            .ensure_toolchain_and_components_exist()
-            .context("ensuring toolchain and components exist")?;
-
-        let checkout = spirv_version
-            .cached_checkout_path()
-            .context("getting cached checkout path")?;
-        let release = checkout.join("target").join("release");
+        // TODO what about lockfiles?
+        // let spirv_version = self.spirv_cli().context("running spirv cli")?;
+        let source = SpirvSource::new(
+            &self.spirv_install.shader_crate,
+            self.spirv_install.spirv_builder_source.as_deref(),
+            self.spirv_install.spirv_builder_version.as_deref(),
+        )?;
+        let checkout = source.install_dir()?;
 
         let dylib_filename = format!(
             "{}rustc_codegen_spirv{}",
@@ -186,22 +176,36 @@ package = "rustc_codegen_spirv"
             log::info!("...and so we are aborting the install step.");
         } else {
             log::debug!(
-                "writing rustc_codegen_spirv_dummy source files into '{}'",
+                "writing `rustc_codegen_spirv_dummy` source files into '{}'",
                 checkout.display()
             );
-            Self::write_source_files(&spirv_version, &checkout).context("writing source files")?;
+            Self::write_source_files(&source, &checkout).context("writing source files")?;
+
+            log::debug!("resolving toolchain version to use");
+            let rustc_codegen_spirv = get_package_from_crate(&checkout, "rustc_codegen_spirv")
+                .context("get `rustc_codegen_spirv` metadata")?;
+            let toolchain_channel =
+                get_channel_from_rustc_codegen_spirv_build_script(&rustc_codegen_spirv)
+                    .context("read toolchain from `rustc_codegen_spirv`'s build.rs")?;
+            log::info!("selected toolchain channel `{toolchain_channel:?}`");
+
+            log::debug!("ensure_toolchain_and_components_exist");
+            crate::install_toolchain::ensure_toolchain_and_components_exist(
+                &toolchain_channel,
+                self.spirv_install.auto_install_rust_toolchain,
+            )
+            .context("ensuring toolchain and components exist")?;
+
+            log::debug!("write_target_spec_files");
             self.write_target_spec_files()
                 .context("writing target spec files")?;
 
-            crate::user_output!(
-                "Compiling shader-specific `rustc_codegen_spirv` for {}\n",
-                self.spirv_install.shader_crate.display()
-            );
+            crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source,);
 
             let mut build_command = std::process::Command::new("cargo");
             build_command
                 .current_dir(&checkout)
-                .arg(format!("+{}", spirv_version.channel))
+                .arg(format!("+{}", toolchain_channel))
                 .args(["build", "--release"])
                 .env_remove("RUSTC");
 
@@ -221,7 +225,10 @@ package = "rustc_codegen_spirv"
                 })
                 .context("running build command")?;
 
-            let dylib_path = release.join(&dylib_filename);
+            let dylib_path = checkout
+                .join("target")
+                .join("release")
+                .join(&dylib_filename);
             if dylib_path.is_file() {
                 log::info!("successfully built {}", dylib_path.display());
                 std::fs::rename(&dylib_path, &dest_dylib_path).context("renaming dylib path")?;

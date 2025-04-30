@@ -63,12 +63,6 @@ pub struct InstallArgs {
     #[clap(long, verbatim_doc_comment)]
     pub spirv_builder_version: Option<String>,
 
-    /// Rust toolchain channel to use to build `spirv-builder`.
-    ///
-    /// This must be compatible with the `spirv_builder` argument as defined in the `rust-gpu` repo.
-    #[clap(long)]
-    pub rust_toolchain: Option<String>,
-
     /// Force `spirv-builder-cli` and `rustc_codegen_spirv` to be rebuilt.
     #[clap(long)]
     pub force_spirv_cli_rebuild: bool,

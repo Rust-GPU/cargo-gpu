@@ -5,18 +5,23 @@
 //! From there we can look at the source code to get the required Rust toolchain.
 
 use anyhow::{anyhow, Context as _};
-use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
+use cargo_metadata::camino::Utf8PathBuf;
 use cargo_metadata::semver::Version;
 use cargo_metadata::{MetadataCommand, Package};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// The canonical `rust-gpu` URI
-const RUST_GPU_REPO: &str = "https://github.com/Rust-GPU/rust-gpu";
-
-/// The various sources that the `rust-gpu` repo can have.
-/// Most commonly it will simply be the canonical version on crates.io. But it could also be the
-/// Git version, or a fork.
+#[expect(
+    clippy::doc_markdown,
+    reason = "The URL should appear literally like this. But Clippy wants it to be a in markdown clickable link"
+)]
+/// The source and version of `rust-gpu`.
+/// Eg:
+///   * From crates.io with version "0.10.0"
+///   * From Git with:
+///     - a repo of "https://github.com/Rust-GPU/rust-gpu.git"
+///     - a revision of "abc213"
+///   * a local Path
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum SpirvSource {
     /// If the shader specifies a simple version like `spirv-std = "0.9.0"` then the source of
@@ -60,114 +65,47 @@ impl core::fmt::Display for SpirvSource {
 }
 
 impl SpirvSource {
+    pub fn new(
+        shader_crate_path: &Path,
+        maybe_rust_gpu_source: Option<&str>,
+        maybe_rust_gpu_version: Option<&str>,
+    ) -> anyhow::Result<Self> {
+        let source = if let Some(rust_gpu_version) = maybe_rust_gpu_version {
+            if let Some(rust_gpu_source) = maybe_rust_gpu_source {
+                SpirvSource::Git {
+                    url: rust_gpu_source.to_owned(),
+                    rev: rust_gpu_version.to_owned(),
+                }
+            } else {
+                SpirvSource::CratesIO(Version::parse(&rust_gpu_version)?)
+            }
+        } else {
+            SpirvSource::get_rust_gpu_deps_from_shader(shader_crate_path)
+                .context("get_rust_gpu_deps_from_shader")?
+        };
+        Ok(source)
+    }
+
     /// Look into the shader crate to get the version of `rust-gpu` it's using.
-    pub fn get_rust_gpu_deps_from_shader<F: AsRef<Path>>(
-        shader_crate_path: F,
-    ) -> anyhow::Result<(Self, String)> {
-        let spirv_std_package = Self::get_spirv_std_package(shader_crate_path.as_ref())?;
+    pub fn get_rust_gpu_deps_from_shader(shader_crate_path: &Path) -> anyhow::Result<Self> {
+        let spirv_std_package = get_package_from_crate(&shader_crate_path, "spirv-std")?;
         let spirv_source = Self::parse_spirv_std_source_and_version(&spirv_std_package)?;
-        let channel = Self::get_channel_from_toolchain_toml(&spirv_std_package)?;
         log::debug!(
-            "Parsed version and toolchain channel from shader-defined `rust-gpu`: \
-            {spirv_source:?}, {channel}"
+            "Parsed `SpirvSource` from crate `{}`: \
+            {spirv_source:?}",
+            shader_crate_path.display(),
         );
-        Ok((spirv_source, channel))
+        Ok(spirv_source)
     }
 
-    /// Convert the source to just its version.
-    pub fn to_version(&self) -> String {
-        match self {
-            Self::CratesIO(version) | Self::Path { version, .. } => version.to_string(),
-            Self::Git { rev, .. } => rev.to_string(),
-        }
-    }
-
-    /// Convert the source to just its repo or path.
-    /// Must be root of git repository.
-    fn to_repo(&self) -> String {
-        match self {
-            Self::CratesIO(_) => RUST_GPU_REPO.to_owned(),
-            Self::Git { url, .. } => url.to_owned(),
-            Self::Path { rust_gpu_path, .. } => rust_gpu_path.to_string(),
-        }
-    }
-
-    /// Convert the `rust-gpu` source into a string that can be used as a directory.
+    /// Convert the `SpirvSource` to a cache directory in which we can build it.
     /// It needs to be dynamically created because an end-user might want to swap out the source,
     /// maybe using their own fork for example.
-    fn to_dirname(&self) -> anyhow::Result<std::path::PathBuf> {
+    pub fn install_dir(&self) -> anyhow::Result<PathBuf> {
         let dir = crate::to_dirname(self.to_string().as_ref());
-        Ok(crate::cache_dir()?.join("rust-gpu-repo").join(dir))
-    }
-
-    /// Make sure shader crate path is absolute and canonical.
-    fn shader_crate_path_canonical(shader_crate_path: &Path) -> anyhow::Result<PathBuf> {
-        let mut canonical_path = shader_crate_path.to_path_buf();
-
-        if !canonical_path.is_absolute() {
-            let cwd = std::env::current_dir().context("no cwd")?;
-            canonical_path = cwd.join(canonical_path);
-        }
-        canonical_path = canonical_path
-            .canonicalize()
-            .context("could not get absolute path to shader crate")?;
-
-        if !canonical_path.is_dir() {
-            log::error!("{shader_crate_path:?} is not a directory, aborting");
-            anyhow::bail!("{shader_crate_path:?} is not a directory");
-        }
-        Ok(canonical_path)
-    }
-
-    /// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
-    fn get_channel_from_toolchain_toml(spirv_std_package: &Package) -> anyhow::Result<String> {
-        // TODO can we query the toolchain toml from spirv_std, or should we rather do that from rustc_codegen_spirv within our build dir?
-        let path = spirv_std_package
-            .manifest_path
-            .parent()
-            .and_then(Utf8Path::parent)
-            .and_then(Utf8Path::parent)
-            .context("parent of spirv_std")?;
-
-        log::debug!("Parsing `rust-toolchain.toml` at {path:?} for the used toolchain");
-
-        let contents = fs::read_to_string(path.join("rust-toolchain.toml"))?;
-        let toml: toml::Table = toml::from_str(&contents)?;
-        let Some(toolchain) = toml.get("toolchain") else {
-            anyhow::bail!(
-                "Couldn't find `[toolchain]` section in `rust-toolchain.toml` at {path:?}"
-            );
-        };
-        let Some(channel) = toolchain.get("channel") else {
-            anyhow::bail!("Couldn't find `channel` field in `rust-toolchain.toml` at {path:?}");
-        };
-
-        Ok(channel.to_string().replace('"', ""))
-    }
-
-    /// Get the shader crate's resolved `spirv_std = ...` definition in its `Cargo.toml`/`Cargo.lock`
-    pub fn get_spirv_std_package(shader_crate_path: &Path) -> anyhow::Result<Package> {
-        let canonical_shader_path = Self::shader_crate_path_canonical(shader_crate_path)?;
-
-        log::debug!(
-            "Running `cargo metadata` on {}",
-            canonical_shader_path.display()
-        );
-        let metadata = MetadataCommand::new()
-            .current_dir(&canonical_shader_path)
-            .exec()?;
-
-        let Some(spirv_std_package) = metadata
-            .packages
-            .into_iter()
-            .find(|package| package.name.eq("spirv-std"))
-        else {
-            anyhow::bail!(
-                "`spirv-std` not found in shader's `Cargo.toml` at {canonical_shader_path:?}"
-            );
-        };
-        log::trace!("  found {spirv_std_package:?}");
-        Ok(spirv_std_package)
+        Ok(crate::cache_dir()?
+            .join("rustc_backend_spirv_install")
+            .join(dir))
     }
 
     /// Parse a string like:
@@ -229,6 +167,69 @@ impl SpirvSource {
     }
 }
 
+/// Make sure shader crate path is absolute and canonical.
+fn crate_path_canonical(shader_crate_path: &Path) -> anyhow::Result<PathBuf> {
+    let mut canonical_path = shader_crate_path.to_path_buf();
+
+    if !canonical_path.is_absolute() {
+        let cwd = std::env::current_dir().context("no cwd")?;
+        canonical_path = cwd.join(canonical_path);
+    }
+    canonical_path = canonical_path
+        .canonicalize()
+        .context("could not get absolute path to shader crate")?;
+
+    if !canonical_path.is_dir() {
+        log::error!("{shader_crate_path:?} is not a directory, aborting");
+        anyhow::bail!("{shader_crate_path:?} is not a directory");
+    }
+    Ok(canonical_path)
+}
+
+/// get the Package metadata from some crate
+pub fn get_package_from_crate(crate_path: &Path, crate_name: &str) -> anyhow::Result<Package> {
+    let canonical_crate_path = crate_path_canonical(crate_path)?;
+
+    log::debug!(
+        "Running `cargo metadata` on `{}` to query for package `{crate_name}`",
+        canonical_crate_path.display()
+    );
+    let metadata = MetadataCommand::new()
+        .current_dir(&canonical_crate_path)
+        .exec()?;
+
+    let Some(package) = metadata
+        .packages
+        .into_iter()
+        .find(|package| package.name.eq(crate_name))
+    else {
+        anyhow::bail!("`{crate_name}` not found in `Cargo.toml` at `{canonical_crate_path:?}`");
+    };
+    log::trace!("  found `{}` version `{}`", package.name, package.version);
+    Ok(package)
+}
+
+/// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
+pub fn get_channel_from_rustc_codegen_spirv_build_script(
+    rustc_codegen_spirv_package: &Package,
+) -> anyhow::Result<String> {
+    let path = rustc_codegen_spirv_package
+        .manifest_path
+        .parent()
+        .context("finding `rustc_codegen_spirv` crate root")?;
+    let build_rs = path.join("build.rs");
+
+    log::debug!("Parsing `build.rs` at {build_rs:?} for the used toolchain");
+    let contents = fs::read_to_string(&build_rs)?;
+    let channel_start = "channel = \"";
+    let channel_line = contents
+        .lines()
+        .find_map(|line| line.strip_prefix(channel_start))
+        .context(format!("Can't find `{channel_start}` line in {build_rs:?}"))?;
+    let channel = &channel_line[..channel_line.find("\"").context("ending \" missing")?];
+    Ok(channel.to_string())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -236,8 +237,7 @@ mod test {
     #[test_log::test]
     fn parsing_spirv_std_dep_for_shader_template() {
         let shader_template_path = crate::test::shader_crate_template_path();
-        let (source, _) =
-            SpirvSource::get_rust_gpu_deps_from_shader(&shader_template_path).unwrap();
+        let source = SpirvSource::get_rust_gpu_deps_from_shader(&shader_template_path).unwrap();
         assert_eq!(
             source,
             SpirvSource::Git {
@@ -251,5 +251,22 @@ mod test {
     fn path_sanity() {
         let path = std::path::PathBuf::from("./");
         assert!(path.is_relative());
+    }
+
+    #[test_log::test]
+    fn cached_checkout_dir_sanity() {
+        let shader_template_path = crate::test::shader_crate_template_path();
+        let source = SpirvSource::get_rust_gpu_deps_from_shader(&shader_template_path).unwrap();
+        let dir = source.install_dir().unwrap();
+        let name = dir
+            .file_name()
+            .unwrap()
+            .to_str()
+            .map(std::string::ToString::to_string)
+            .unwrap();
+        assert_eq!(
+            "https___github_com_Rust-GPU_rust-gpu+82a0f69008414f51d59184763146caa6850ac588",
+            &name
+        );
     }
 }
