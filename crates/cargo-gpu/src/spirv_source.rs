@@ -55,11 +55,18 @@ impl core::fmt::Display for SpirvSource {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::CratesIO(version) => version.fmt(f),
-            Self::Git { url, rev } => f.write_str(&format!("{url}+{rev}")),
+            Self::Git { url, rev } => {
+                // shorten rev to 8 chars, prevents windows compile errors due to too long paths... seriously
+                if let Some(short_rev) = rev.get(..8) {
+                    write!(f, "{url}+{short_rev}")
+                } else {
+                    write!(f, "{url}+{rev}")
+                }
+            }
             Self::Path {
                 rust_gpu_repo_root,
                 version,
-            } => f.write_str(&format!("{rust_gpu_repo_root}+{version}")),
+            } => write!(f, "{rust_gpu_repo_root}+{version}"),
         }
     }
 }
@@ -109,9 +116,7 @@ impl SpirvSource {
             } => Ok(rust_gpu_repo_root.as_std_path().to_owned()),
             Self::CratesIO { .. } | Self::Git { .. } => {
                 let dir = crate::to_dirname(self.to_string().as_ref());
-                Ok(crate::cache_dir()?
-                    .join("rustc_backend_spirv_install")
-                    .join(dir))
+                Ok(crate::cache_dir()?.join("codegen").join(dir))
             }
         }
     }
@@ -269,9 +274,6 @@ mod test {
             .to_str()
             .map(std::string::ToString::to_string)
             .unwrap();
-        assert_eq!(
-            "https___github_com_Rust-GPU_rust-gpu+82a0f69008414f51d59184763146caa6850ac588",
-            &name
-        );
+        assert_eq!("https___github_com_Rust-GPU_rust-gpu+82a0f690", &name);
     }
 }
