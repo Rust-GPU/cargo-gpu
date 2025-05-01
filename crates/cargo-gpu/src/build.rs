@@ -7,11 +7,11 @@ use crate::linkage::Linkage;
 use crate::lockfile::LockfileMismatchHandler;
 use crate::{install::Install, target_spec_dir};
 use anyhow::Context as _;
-use spirv_builder::ModuleResult;
+use spirv_builder::{CompileResult, ModuleResult};
 use std::io::Write as _;
 
 /// `cargo build` subcommands
-#[derive(clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Build {
     /// CLI args for install the `rust-gpu` compiler and components
     #[clap(flatten)]
@@ -64,15 +64,31 @@ impl Build {
             std::env::current_dir()?.display()
         );
 
-        if !self.build_args.watch {
+        if self.build_args.watch {
+            let this = self.clone();
+            self.build_args
+                .spirv_builder
+                .watch(move |result, accept| {
+                    let result1 = this.parse_compilation_result(&result);
+                    if let Some(accept) = accept {
+                        accept.submit(result1);
+                    }
+                })?
+                .context("unreachable")??;
+            std::thread::park();
+        } else {
             crate::user_output!(
                 "Compiling shaders at {}...\n",
                 self.install.spirv_install.shader_crate.display()
             );
+            let result = self.build_args.spirv_builder.build()?;
+            self.parse_compilation_result(&result)?;
         }
+        Ok(())
+    }
 
-        let result = self.build_args.spirv_builder.build()?;
-
+    /// Parses compilation result from `SpirvBuilder` and writes it out to a file
+    fn parse_compilation_result(&self, result: &CompileResult) -> anyhow::Result<()> {
         let shaders = match &result.module {
             ModuleResult::MultiModule(modules) => {
                 anyhow::ensure!(!modules.is_empty(), "No shader modules were compiled");

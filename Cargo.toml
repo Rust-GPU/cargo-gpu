@@ -1,19 +1,19 @@
 [workspace]
 members = [
-    "crates/cargo-gpu", 
-		"crates/xtask",
+	"crates/cargo-gpu",
+	"crates/xtask",
 ]
 
 exclude = [
-    # This currently needs to be excluded because it depends on a version of `rust-gpu` that
-    # uses a toolchain whose Cargo version doesn't recognise version 4 of `Cargo.lock`.
-    "crates/shader-crate-template"
+	# This currently needs to be excluded because it depends on a version of `rust-gpu` that
+	# uses a toolchain whose Cargo version doesn't recognise version 4 of `Cargo.lock`.
+	"crates/shader-crate-template"
 ]
 
 resolver = "2"
 
 [workspace.dependencies]
-spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu.git", rev = "eca83dfbfc0aae5c72f1e3f53081f5ccb72c27a4", default-features = false }
+spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu.git", rev = "74d1c66ceb855f60a995621652c5158a474cb2ee", default-features = false }
 anyhow = "1.0.94"
 clap = { version = "4.5.37", features = ["derive"] }
 crossterm = "0.28.1"

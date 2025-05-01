@@ -12,7 +12,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 /// `cargo gpu install`
-#[derive(clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Install {
     /// CLI arguments for installing the Rust toolchain and components
     #[clap(flatten)]
