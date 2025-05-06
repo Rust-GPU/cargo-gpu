@@ -32,7 +32,7 @@ impl Metadata {
             &mut metadata,
             {
                 log::debug!("looking for workspace metadata");
-                let ws_meta = Self::get_workspace_metadata(cargo_json);
+                let ws_meta = Self::get_rust_gpu_from_metadata(&cargo_json.workspace_metadata);
                 log::trace!("workspace_metadata: {ws_meta:#?}");
                 ws_meta
             },
@@ -64,17 +64,10 @@ impl Metadata {
     }
 
     /// Convert a `Cargo.toml` to JSON
-    //
-    // TODO: reuse for getting the default `rust-gpu` source and toolchain.
     fn get_cargo_toml_as_json(
         path: &std::path::PathBuf,
     ) -> anyhow::Result<cargo_metadata::Metadata> {
         Ok(MetadataCommand::new().current_dir(path).exec()?)
-    }
-
-    /// Get any `rust-gpu` metadata set in the root workspace `Cargo.toml`
-    fn get_workspace_metadata(metadata: &cargo_metadata::Metadata) -> Value {
-        Self::get_rust_gpu_from_metadata(&metadata.workspace_metadata)
     }
 
     /// Get any `rust-gpu` metadata set in the crate's `Cargo.toml`

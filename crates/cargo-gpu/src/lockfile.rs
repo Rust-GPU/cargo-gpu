@@ -1,5 +1,6 @@
-//! Query the shader crate to find what version of `rust-gpu` it depends on.
-//! Then ensure that the relevant Rust toolchain and components are installed.
+//! Handles lockfile version conflicts and downgrades. Stable uses lockfile v4, but rust-gpu
+//! v0.9.0 uses an old toolchain requiring v3 and will refuse to build with a v4 lockfile being
+//! present. This module takes care of warning the user and potentially downgrading the lockfile.
 
 use anyhow::Context as _;
 use semver::Version;

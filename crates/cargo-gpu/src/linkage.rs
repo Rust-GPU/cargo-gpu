@@ -1,4 +1,4 @@
-//! Mainly for the Linkage struct, which is written to a json file. Previously in `spirv-tools-cli` but got moved here.
+//! Mainly for the Linkage struct, which is written to a json file.
 
 /// Shader source and entry point that can be used to create shader linkage.
 #[derive(serde::Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

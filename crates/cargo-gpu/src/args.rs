@@ -1,4 +1,4 @@
-//! Args for building and installing. Previously in `spirv-tools-cli` but got moved here.
+//! Args for building and installing.
 
 use spirv_builder::SpirvBuilder;
 
@@ -63,7 +63,7 @@ pub struct InstallArgs {
     #[clap(long, verbatim_doc_comment)]
     pub spirv_builder_version: Option<String>,
 
-    /// Force `spirv-builder-cli` and `rustc_codegen_spirv` to be rebuilt.
+    /// Force `rustc_codegen_spirv` to be rebuilt.
     #[clap(long)]
     pub force_spirv_cli_rebuild: bool,
 
