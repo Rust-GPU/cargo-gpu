@@ -64,159 +64,220 @@ for an example.
     build    Compile a shader crate to SPIR-V
     show     Show some useful values
     help     Print this message or the help of the given subcommand(s)
-
+  
   Options:
     -h, --help
             Print help
-
+  
     -V, --version
             Print version
 
 
 * Install
   Install rust-gpu compiler artifacts
-
+  
   Usage: cargo-gpu install [OPTIONS]
-
+  
   Options:
         --shader-crate <SHADER_CRATE>
             Directory containing the shader crate to compile
-
+            
             [default: ./]
-
+  
         --spirv-builder-source <SPIRV_BUILDER_SOURCE>
             Source of `spirv-builder` dependency Eg: "https://github.com/Rust-GPU/rust-gpu"
-
+  
         --spirv-builder-version <SPIRV_BUILDER_VERSION>
             Version of `spirv-builder` dependency.
             * If `--spirv-builder-source` is not set, then this is assumed to be a crates.io semantic
               version such as "0.9.0".
             * If `--spirv-builder-source` is set, then this is assumed to be a Git "commitsh", such
               as a Git commit hash or a Git tag, therefore anything that `git checkout` can resolve.
-
-        --rust-toolchain <RUST_TOOLCHAIN>
-            Rust toolchain channel to use to build `spirv-builder`.
-
-            This must be compatible with the `spirv_builder` argument as defined in the `rust-gpu` repo.
-
+  
         --force-spirv-cli-rebuild
-            Force `spirv-builder-cli` and `rustc_codegen_spirv` to be rebuilt
-
+            Force `rustc_codegen_spirv` to be rebuilt
+  
         --auto-install-rust-toolchain
             Assume "yes" to "Install Rust toolchain: [y/n]" prompt
-
+  
+        --force-overwrite-lockfiles-v4-to-v3
+            There is a tricky situation where a shader crate that depends on workspace config can have
+            a different `Cargo.lock` lockfile version from the the workspace's `Cargo.lock`. This can
+            prevent builds when an old Rust toolchain doesn't recognise the newer lockfile version.
+            
+            The ideal way to resolve this would be to match the shader crate's toolchain with the
+            workspace's toolchain. However, that is not always possible. Another solution is to
+            `exclude = [...]` the problematic shader crate from the workspace. This also may not be a
+            suitable solution if there are a number of shader crates all sharing similar config and
+            you don't want to have to copy/paste and maintain that config across all the shaders.
+            
+            So a somewhat hacky workaround is to have `cargo gpu` overwrite lockfile versions. Enabling
+            this flag will only come into effect if there are a mix of v3/v4 lockfiles. It will also
+            only overwrite versions for the duration of a build. It will attempt to return the versions
+            to their original values once the build is finished. However, of course, unexpected errors
+            can occur and the overwritten values can remain. Hence why this behaviour is not enabled by
+            default.
+            
+            This hack is possible because the change from v3 to v4 only involves a minor change to the
+            way source URLs are encoded. See these PRs for more details:
+              * <https://github.com/rust-lang/cargo/pull/12280>
+              * <https://github.com/rust-lang/cargo/pull/14595>
+  
     -h, --help
             Print help (see a summary with '-h')
 
 
 * Build
   Compile a shader crate to SPIR-V
-
+  
   Usage: cargo-gpu build [OPTIONS]
-
+  
   Options:
         --shader-crate <SHADER_CRATE>
             Directory containing the shader crate to compile
-
+            
             [default: ./]
-
+  
         --spirv-builder-source <SPIRV_BUILDER_SOURCE>
             Source of `spirv-builder` dependency Eg: "https://github.com/Rust-GPU/rust-gpu"
-
+  
         --spirv-builder-version <SPIRV_BUILDER_VERSION>
             Version of `spirv-builder` dependency.
             * If `--spirv-builder-source` is not set, then this is assumed to be a crates.io semantic
               version such as "0.9.0".
             * If `--spirv-builder-source` is set, then this is assumed to be a Git "commitsh", such
               as a Git commit hash or a Git tag, therefore anything that `git checkout` can resolve.
-
-        --rust-toolchain <RUST_TOOLCHAIN>
-            Rust toolchain channel to use to build `spirv-builder`.
-
-            This must be compatible with the `spirv_builder` argument as defined in the `rust-gpu` repo.
-
+  
         --force-spirv-cli-rebuild
-            Force `spirv-builder-cli` and `rustc_codegen_spirv` to be rebuilt
-
+            Force `rustc_codegen_spirv` to be rebuilt
+  
         --auto-install-rust-toolchain
             Assume "yes" to "Install Rust toolchain: [y/n]" prompt
-
+  
+        --force-overwrite-lockfiles-v4-to-v3
+            There is a tricky situation where a shader crate that depends on workspace config can have
+            a different `Cargo.lock` lockfile version from the the workspace's `Cargo.lock`. This can
+            prevent builds when an old Rust toolchain doesn't recognise the newer lockfile version.
+            
+            The ideal way to resolve this would be to match the shader crate's toolchain with the
+            workspace's toolchain. However, that is not always possible. Another solution is to
+            `exclude = [...]` the problematic shader crate from the workspace. This also may not be a
+            suitable solution if there are a number of shader crates all sharing similar config and
+            you don't want to have to copy/paste and maintain that config across all the shaders.
+            
+            So a somewhat hacky workaround is to have `cargo gpu` overwrite lockfile versions. Enabling
+            this flag will only come into effect if there are a mix of v3/v4 lockfiles. It will also
+            only overwrite versions for the duration of a build. It will attempt to return the versions
+            to their original values once the build is finished. However, of course, unexpected errors
+            can occur and the overwritten values can remain. Hence why this behaviour is not enabled by
+            default.
+            
+            This hack is possible because the change from v3 to v4 only involves a minor change to the
+            way source URLs are encoded. See these PRs for more details:
+              * <https://github.com/rust-lang/cargo/pull/12280>
+              * <https://github.com/rust-lang/cargo/pull/14595>
+  
     -o, --output-dir <OUTPUT_DIR>
             Path to the output directory for the compiled shaders
-
+            
             [default: ./]
-
-        --no-default-features
-            Set cargo default-features
-
-        --features <FEATURES>
-            Set cargo features
-
-        --target <TARGET>
-            `rust-gpu` compile target
-
-            [default: spirv-unknown-vulkan1.2]
-
-        --shader-target <SHADER_TARGET>
-            Shader target
-
-            [default: spirv-unknown-vulkan1.2]
-
-        --deny-warnings
-            Treat warnings as errors during compilation
-
+  
+    -w, --watch
+            Watch the shader crate directory and automatically recompile on changes
+  
         --debug
-            Compile shaders in debug mode
-
-        --capability <CAPABILITY>
-            Enables the provided SPIR-V capabilities. See: `impl core::str::FromStr for spirv_builder::Capability`
-
-        --extension <EXTENSION>
-            Enables the provided SPIR-V extensions. See <https://github.com/KhronosGroup/SPIRV-Registry> for all extensions
-
+            Build in release. Defaults to true
+  
+        --target <TARGET>
+            The target triple, eg. `spirv-unknown-vulkan1.2`
+            
+            [default: spirv-unknown-vulkan1.2]
+  
+        --no-default-features
+            Set --default-features for the target shader crate
+  
+        --features <FEATURES>
+            Set --features for the target shader crate
+  
+        --deny-warnings
+            Deny any warnings, as they may never be printed when building within a build script. Defaults to false
+  
         --multimodule
-            Compile one .spv file per entry point
-
+            Splits the resulting SPIR-V file into one module per entry point. This is useful in cases where ecosystem tooling has bugs around multiple entry points per module - having all entry points bundled into a single file is the preferred system
+  
         --spirv-metadata <SPIRV_METADATA>
-            Set the level of metadata included in the SPIR-V binary
-
+            Sets the level of metadata (primarily `OpName` and `OpLine`) included in the SPIR-V binary. Including metadata significantly increases binary size
+            
             [default: none]
-
+  
+            Possible values:
+            - none:           Strip all names and other debug information from SPIR-V output
+            - name-variables: Only include `OpName`s for public interface variables (uniforms and the like), to allow shader reflection
+            - full:           Include all `OpName`s for everything, and `OpLine`s. Significantly increases binary size
+  
+        --capabilities <CAPABILITIES>
+            Adds a capability to the SPIR-V module. Checking if a capability is enabled in code can be done via `#[cfg(target_feature = "TheCapability")]`
+  
+        --extensions <EXTENSIONS>
+            Adds an extension to the SPIR-V module. Checking if an extension is enabled in code can be done via `#[cfg(target_feature = "ext:the_extension")]`
+  
         --relax-struct-store
-            Allow store from one struct type to a different type with compatible layout and members
-
+            Record whether or not the validator should relax the rules on types for stores to structs.  When relaxed, it will allow a type mismatch as long as the types are structs with the same layout.  Two structs have the same layout if
+            
+            1) the members of the structs are either the same type or are structs with same layout, and
+            
+            2) the decorations that affect the memory layout are identical for both types.  Other decorations are not relevant.
+  
         --relax-logical-pointer
-            Allow allocating an object of a pointer type and returning a pointer value from a function in logical addressing mode
-
-        --relax-block-layout
-            Enable `VK_KHR_relaxed_block_layout` when checking standard uniform, storage buffer, and push constant layouts. This is the default when targeting Vulkan 1.1 or later
-
+            Records whether or not the validator should relax the rules on pointer usage in logical addressing mode.
+            
+            When relaxed, it will allow the following usage cases of pointers: 1) `OpVariable` allocating an object whose type is a pointer type 2) `OpReturnValue` returning a pointer value
+  
+        --relax-block-layout <RELAX_BLOCK_LAYOUT>
+            Records whether the validator should use "relaxed" block layout rules. Relaxed layout rules are described by Vulkan extension `VK_KHR_relaxed_block_layout`, and they affect uniform blocks, storage blocks, and push constants.
+            
+            This is enabled by default when targeting Vulkan 1.1 or later. Relaxed layout is more permissive than the default rules in Vulkan 1.0.
+            
+            [default: false]
+            [possible values: true, false]
+  
         --uniform-buffer-standard-layout
-            Enable `VK_KHR_uniform_buffer_standard_layout` when checking standard uniform buffer layouts
-
+            Records whether the validator should use standard block layout rules for uniform blocks
+  
         --scalar-block-layout
-            Enable `VK_EXT_scalar_block_layout` when checking standard uniform, storage buffer, and push constant layouts. Scalar layout rules are more permissive than relaxed block layout so in effect this will override the --relax-block-layout option
-
+            Records whether the validator should use "scalar" block layout rules. Scalar layout rules are more permissive than relaxed block layout.
+            
+            See Vulkan extnesion `VK_EXT_scalar_block_layout`.  The scalar alignment is defined as follows: - scalar alignment of a scalar is the scalar size - scalar alignment of a vector is the scalar alignment of its component - scalar alignment of a matrix is the scalar alignment of its component - scalar alignment of an array is the scalar alignment of its element - scalar alignment of a struct is the max scalar alignment among its members
+            
+            For a struct in Uniform, `StorageClass`, or `PushConstant`: - a member Offset must be a multiple of the member's scalar alignment - `ArrayStride` or `MatrixStride` must be a multiple of the array or matrix scalar alignment
+  
         --skip-block-layout
-            Skip checking standard uniform / storage buffer layout. Overrides any --relax-block-layout or --scalar-block-layout option
-
+            Records whether or not the validator should skip validating standard uniform/storage block layout
+  
         --preserve-bindings
-            Preserve unused descriptor bindings. Useful for reflection
-
+            Records whether all bindings within the module should be preserved
+  
+    -m, --manifest-file <MANIFEST_FILE>
+            Renames the manifest.json file to the given name
+            
+            [default: manifest.json]
+  
     -h, --help
             Print help (see a summary with '-h')
 
 
 * Show
   Show some useful values
-
+  
   Usage: cargo-gpu show <COMMAND>
-
+  
   Commands:
     cache-directory  Displays the location of the cache directory
     spirv-source     The source location of spirv-std
+    commitsh         The git commitsh of this cli tool
+    capabilities     All the available SPIR-V capabilities that can be set with `--capabilities`
     help             Print this message or the help of the given subcommand(s)
-
+  
   Options:
     -h, --help
             Print help
@@ -224,9 +285,9 @@ for an example.
 
         * Cache-directory
           Displays the location of the cache directory
-
+          
           Usage: cargo-gpu show cache-directory
-
+          
           Options:
             -h, --help
                     Print help
@@ -234,15 +295,35 @@ for an example.
 
         * Spirv-source
           The source location of spirv-std
-
+          
           Usage: cargo-gpu show spirv-source [OPTIONS]
-
+          
           Options:
                 --shader-crate <SHADER_CRATE>
                     The location of the shader-crate to inspect to determine its spirv-std dependency
-
+                    
                     [default: ./]
+          
+            -h, --help
+                    Print help
 
+
+        * Commitsh
+          The git commitsh of this cli tool
+          
+          Usage: cargo-gpu show commitsh
+          
+          Options:
+            -h, --help
+                    Print help
+
+
+        * Capabilities
+          All the available SPIR-V capabilities that can be set with `--capabilities`
+          
+          Usage: cargo-gpu show capabilities
+          
+          Options:
             -h, --help
                     Print help
 ````
