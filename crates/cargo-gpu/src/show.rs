@@ -19,7 +19,7 @@ pub enum Info {
     SpirvSource(SpirvSourceDep),
     /// The git commitsh of this cli tool.
     Commitsh,
-    /// All the available SPIR-V capabilities that can be set with `--capability`
+    /// All the available SPIR-V capabilities that can be set with `--capabilities`
     Capabilities,
 }
 
@@ -54,7 +54,7 @@ impl Show {
                 println!("{}", std::env!("GIT_HASH"));
             }
             Info::Capabilities => {
-                println!("All available options to the `cargo gpu build --capability` argument:");
+                println!("All available options to the `cargo gpu build --capabilities` argument:");
                 #[expect(
                     clippy::use_debug,
                     reason = "It's easier to just use `Debug` formatting than implementing `Display`"
