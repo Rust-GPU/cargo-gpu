@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 #[expect(
     clippy::doc_markdown,
-    reason = "The URL should appear literally like this. But Clippy wants it to be a in markdown clickable link"
+    reason = "The URL should appear literally like this. But Clippy wants a markdown clickable link"
 )]
 /// The source and version of `rust-gpu`.
 /// Eg:
