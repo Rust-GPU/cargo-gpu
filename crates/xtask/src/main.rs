@@ -151,18 +151,7 @@ fn main() {
             log::info!("installing cargo gpu");
             cmd(["cargo", "install", "--path", "crates/cargo-gpu"]).unwrap();
 
-            log::info!("installing cargo gpu artifacts");
-            cmd([
-                "cargo",
-                "gpu",
-                "install",
-                "--shader-crate",
-                SHADER_CRATE_PATH,
-                "--auto-install-rust-toolchain",
-                "--force-overwrite-lockfiles-v4-to-v3",
-            ])
-            .unwrap();
-
+            log::info!("setup project");
             let dir = tempdir::TempDir::new("test-shader-output").unwrap();
             let mut overwriter = ShaderCrateTemplateCargoTomlWriter::new();
             overwriter.replace_output_dir(dir.path()).unwrap();
@@ -175,6 +164,7 @@ fn main() {
                 }
             }
 
+            log::info!("building with auto-install");
             cmd([
                 "cargo",
                 "gpu",
