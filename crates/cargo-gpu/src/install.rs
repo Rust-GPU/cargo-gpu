@@ -6,7 +6,7 @@ use crate::spirv_source::{
 use crate::{cache_dir, spirv_source::SpirvSource, target_spec_dir};
 use anyhow::Context as _;
 use log::trace;
-use spirv_builder::TARGET_SPECS;
+use spirv_builder::{SpirvBuilder, TARGET_SPECS};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -75,6 +75,28 @@ pub struct Install {
     ///   * <https://github.com/rust-lang/cargo/pull/14595>
     #[clap(long, action, verbatim_doc_comment)]
     pub force_overwrite_lockfiles_v4_to_v3: bool,
+}
+
+/// Represents a functional backend installation, whether it was cached or just installed.
+#[derive(Clone, Debug)]
+pub struct InstalledBackend {
+    /// path to the `rustc_codegen_spirv` dylib
+    pub rustc_codegen_spirv_location: PathBuf,
+    /// toolchain channel name
+    pub toolchain_channel: String,
+}
+
+impl InstalledBackend {
+    /// Configures the supplied [`SpirvBuilder`]. `SpirvBuilder.target` must be set and must not change after calling this function.
+    pub fn configure_spirv_builder(&self, builder: &mut SpirvBuilder) -> anyhow::Result<()> {
+        builder.rustc_codegen_spirv_location = Some(self.rustc_codegen_spirv_location.clone());
+        builder.toolchain_overwrite = Some(self.toolchain_channel.clone());
+        builder.path_to_target_spec = Some(target_spec_dir()?.join(format!(
+            "{}.json",
+            builder.target.as_ref().context("expect target to be set")?
+        )));
+        Ok(())
+    }
 }
 
 impl Default for Install {
@@ -164,7 +186,7 @@ package = "rustc_codegen_spirv"
 
     /// Install the binary pair and return the `(dylib_path, toolchain_channel)`.
     #[expect(clippy::too_many_lines, reason = "it's fine")]
-    pub fn run(&self) -> anyhow::Result<(PathBuf, String)> {
+    pub fn run(&self) -> anyhow::Result<InstalledBackend> {
         // Ensure the cache dir exists
         let cache_dir = cache_dir()?;
         log::info!("cache directory is '{}'", cache_dir.display());
@@ -282,6 +304,9 @@ package = "rustc_codegen_spirv"
                 .context("writing target spec files")?;
         }
 
-        Ok((dest_dylib_path, toolchain_channel))
+        Ok(InstalledBackend {
+            rustc_codegen_spirv_location: dest_dylib_path,
+            toolchain_channel,
+        })
     }
 }
