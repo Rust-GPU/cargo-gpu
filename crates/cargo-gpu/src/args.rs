@@ -37,6 +37,10 @@ pub struct BuildArgs {
 
 /// Args for an install
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "cmdline args have many bools"
+)]
 pub struct InstallArgs {
     /// path to the `rustc_codegen_spirv` dylib
     #[clap(long, hide(true), default_value = "INTERNALLY_SET")]
@@ -70,6 +74,11 @@ pub struct InstallArgs {
     /// Assume "yes" to "Install Rust toolchain: [y/n]" prompt.
     #[clap(long, action)]
     pub auto_install_rust_toolchain: bool,
+
+    /// Clear target dir of `rustc_codegen_spirv` build after a successful build, saves about
+    /// 200MiB of disk space.
+    #[clap(long = "no-clear-target", default_value = "true", action = clap::ArgAction::SetFalse)]
+    pub clear_target: bool,
 
     /// There is a tricky situation where a shader crate that depends on workspace config can have
     /// a different `Cargo.lock` lockfile version from the the workspace's `Cargo.lock`. This can

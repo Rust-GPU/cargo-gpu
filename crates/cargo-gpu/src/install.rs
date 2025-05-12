@@ -188,15 +188,18 @@ package = "rustc_codegen_spirv"
                 })
                 .context("running build command")?;
 
-            let dylib_path = checkout
-                .join("target")
-                .join("release")
-                .join(&dylib_filename);
+            let target = checkout.join("target");
+            let dylib_path = target.join("release").join(&dylib_filename);
             if dylib_path.is_file() {
                 log::info!("successfully built {}", dylib_path.display());
                 if !source_is_path {
                     std::fs::rename(&dylib_path, &dest_dylib_path)
                         .context("renaming dylib path")?;
+
+                    if self.spirv_install.clear_target {
+                        log::warn!("clearing target dir {}", target.display());
+                        std::fs::remove_dir_all(&target).context("clearing target dir")?;
+                    }
                 }
             } else {
                 log::error!("could not find {}", dylib_path.display());
