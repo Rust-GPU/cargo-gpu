@@ -1,50 +1,48 @@
 //! Rust GPU shader crate builder.
 //!
-//! This program manages installations of `spirv-builder-cli` and `rustc_codegen_spirv`.
-//! It uses these tools to compile Rust code into SPIR-V.
+//! This program and library allows you to easily compile your rust-gpu shaders,
+//! without requiring you to fix your entire project to a specific toolchain.
 //!
 //! # How it works
 //!
-//! In order to build shader crates, we must invoke cargo/rustc with a special backend
-//! that performs the SPIR-V code generation. This backend is a dynamic library known
-//! by its project name `rustc_codegen_spirv`. The name of the artifact itself is
-//! OS-dependent.
+//! This program primarily manages installations of `rustc_codegen_spirv`, the
+//! codegen backend of rust-gpu to generate SPIR-V shader binaries. The codegen
+//! backend builds on internal, ever-changing interfaces of rustc, which requires
+//! fixing a version of rust-gpu to a specific version of the rustc compiler.
+//! Usually, this would require you to fix your entire project to that specific
+//! toolchain, but this project loosens that requirement by managing installations
+//! of `rustc_codegen_spirv` and their associated toolchains for you.
 //!
-//! There are a lot of special flags to wrangle and so we use a command line program
-//! that wraps `cargo` to perform the building of shader crates. This cli program is
-//! called `spirv-builder-cli`, which itself is a cli wrapper around the `spirv-builder`
-//! library.
+//! We continue to use rust-gpu's `spirv_builder` crate to pass the many additional
+//! parameters required to configure rustc and our codegen backend, but provide you
+//! with a toolchain agnostic version that you may use from stable rustc. And a
+//! `cargo gpu` cmdline utility to simplify shader building even more.
 //!
 //! ## Where the binaries are
 //!
-//! `cargo-gpu` maintains different versions `spirv-builder-cli` and `rustc_codegen_spirv`
-//! in a cache dir. The location is OS-dependent, for example on macOS it's in
-//! `~/Library/Caches/rust-gpu`. Specific versions live inside the cache dir, prefixed
-//! by their `spirv-builder` cargo dependency and rust toolchain pair.
+//! We store our prebuild `rustc_spirv_builder` binaries in the default cache
+//! directory of your OS:
+//! * Windows: `C:/users/<user>/AppData/Local/rust-gpu`
+//! * Mac: `~/Library/Caches/rust-gpu`
+//! * Linux: `~/.cache/rust-gpu`
 //!
-//! Building a specific "binary pair" of `spirv-builder-cli` and `rustc_codegen_spirv`
-//! happens when there is no existing pair that matches the computed prefix, or if
-//! a force rebuild is specified on the command line.
+//! ## How we build the backend
 //!
-//! ## Building the "binary pairs"
-//!
-//! The source of `spirv-builder-cli` lives alongside this source file, in crate that
-//! is not included in the workspace. That same source code is also included statically
-//! in **this** source file.
-//!
-//! When `spirv-builder-cli` needs to be built, a new directory is created in the cache
-//! where the source to `spirv-builder-cli` is copied into, containing the specific cargo
-//! dependency for `spirv-builder` and the matching rust toolchain channel.
-//!
-//! Then `cargo` is invoked in that cache directory to build the pair of artifacts, which
-//! are then put into the top level of that cache directory.
-//!
-//! This pair of artifacts is then used to build shader crates.
+//! * retrieve the version of rust-gpu you want to use based on the version of the
+//!   `spirv-std` dependency in your shader crate.
+//! * create a dummy project at `<cache_dir>/codegen/<version>/` that depends on
+//!   `rustc_codegen_spirv`
+//! * use `cargo metadata` to `cargo update` the dummy project, which downloads the
+//!   `rustc_codegen_spirv` crate into cargo's cache, and retrieve the path to the
+//!   download location.
+//! * search for the required toolchain in `build.rs` of `rustc_codegen_spirv`
+//! * build it with the required toolchain version
+//! * copy out the binary and clean the target dir
 //!
 //! ## Building shader crates
 //!
 //! `cargo-gpu` takes a path to a shader crate to build, as well as a path to a directory
-//! to put the compiled `spv` source files. It also takes a path to an output mainifest
+//! to put the compiled `spv` source files. It also takes a path to an output manifest
 //! file where all shader entry points will be mapped to their `spv` source files. This
 //! manifest file can be used by build scripts (`build.rs` files) to generate linkage or
 //! conduct other post-processing, like converting the `spv` files into `wgsl` files,
