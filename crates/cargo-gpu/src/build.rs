@@ -2,13 +2,47 @@
 #![allow(clippy::unwrap_used, reason = "this is basically a test")]
 //! `cargo gpu build`, analogous to `cargo build`
 
-use crate::args::BuildArgs;
 use crate::linkage::Linkage;
 use crate::lockfile::LockfileMismatchHandler;
 use crate::{install::Install, target_spec_dir};
 use anyhow::Context as _;
-use spirv_builder::{CompileResult, ModuleResult};
+use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
 use std::io::Write as _;
+use std::path::PathBuf;
+
+/// Args for just a build
+#[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[non_exhaustive]
+pub struct BuildArgs {
+    /// Path to the output directory for the compiled shaders.
+    #[clap(long, short, default_value = "./")]
+    pub output_dir: PathBuf,
+
+    /// Watch the shader crate directory and automatically recompile on changes.
+    #[clap(long, short, action)]
+    pub watch: bool,
+
+    /// the flattened [`SpirvBuilder`]
+    #[clap(flatten)]
+    #[serde(flatten)]
+    pub spirv_builder: SpirvBuilder,
+
+    ///Renames the manifest.json file to the given name
+    #[clap(long, short, default_value = "manifest.json")]
+    pub manifest_file: String,
+}
+
+impl Default for BuildArgs {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            output_dir: PathBuf::from("./"),
+            watch: false,
+            spirv_builder: SpirvBuilder::default(),
+            manifest_file: String::from("manifest.json"),
+        }
+    }
+}
 
 /// `cargo build` subcommands
 #[derive(Clone, clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
@@ -19,7 +53,7 @@ pub struct Build {
 
     /// CLI args for configuring the build of the shader
     #[clap(flatten)]
-    pub build_args: BuildArgs,
+    pub build: BuildArgs,
 }
 
 impl Build {
@@ -28,17 +62,15 @@ impl Build {
         let (rustc_codegen_spirv_location, toolchain_channel) = self.install.run()?;
 
         let _lockfile_mismatch_handler = LockfileMismatchHandler::new(
-            &self.install.spirv_install.shader_crate,
+            &self.install.shader_crate,
             &toolchain_channel,
-            self.install
-                .spirv_install
-                .force_overwrite_lockfiles_v4_to_v3,
+            self.install.force_overwrite_lockfiles_v4_to_v3,
         )?;
 
-        let builder = &mut self.build_args.spirv_builder;
+        let builder = &mut self.build.spirv_builder;
         builder.rustc_codegen_spirv_location = Some(rustc_codegen_spirv_location);
         builder.toolchain_overwrite = Some(toolchain_channel);
-        builder.path_to_crate = Some(self.install.spirv_install.shader_crate.clone());
+        builder.path_to_crate = Some(self.install.shader_crate.clone());
         builder.path_to_target_spec = Some(target_spec_dir()?.join(format!(
             "{}.json",
             builder.target.as_ref().context("expect target to be set")?
@@ -47,26 +79,25 @@ impl Build {
         // Ensure the shader output dir exists
         log::debug!(
             "ensuring output-dir '{}' exists",
-            self.build_args.output_dir.display()
+            self.build.output_dir.display()
         );
-        std::fs::create_dir_all(&self.build_args.output_dir)?;
-        let canonicalized = self.build_args.output_dir.canonicalize()?;
+        std::fs::create_dir_all(&self.build.output_dir)?;
+        let canonicalized = self.build.output_dir.canonicalize()?;
         log::debug!("canonicalized output dir: {}", canonicalized.display());
-        self.build_args.output_dir = canonicalized;
+        self.build.output_dir = canonicalized;
 
         // Ensure the shader crate exists
-        self.install.spirv_install.shader_crate =
-            self.install.spirv_install.shader_crate.canonicalize()?;
+        self.install.shader_crate = self.install.shader_crate.canonicalize()?;
         anyhow::ensure!(
-            self.install.spirv_install.shader_crate.exists(),
+            self.install.shader_crate.exists(),
             "shader crate '{}' does not exist. (Current dir is '{}')",
-            self.install.spirv_install.shader_crate.display(),
+            self.install.shader_crate.display(),
             std::env::current_dir()?.display()
         );
 
-        if self.build_args.watch {
+        if self.build.watch {
             let this = self.clone();
-            self.build_args
+            self.build
                 .spirv_builder
                 .watch(move |result, accept| {
                     let result1 = this.parse_compilation_result(&result);
@@ -79,9 +110,9 @@ impl Build {
         } else {
             crate::user_output!(
                 "Compiling shaders at {}...\n",
-                self.install.spirv_install.shader_crate.display()
+                self.install.shader_crate.display()
             );
-            let result = self.build_args.spirv_builder.build()?;
+            let result = self.build.spirv_builder.build()?;
             self.parse_compilation_result(&result)?;
         }
         Ok(())
@@ -104,7 +135,7 @@ impl Build {
             .into_iter()
             .map(|(entry, filepath)| -> anyhow::Result<Linkage> {
                 use relative_path::PathExt as _;
-                let path = self.build_args.output_dir.join(
+                let path = self.build.output_dir.join(
                     filepath
                         .file_name()
                         .context("Couldn't parse file name from shader module path")?,
@@ -114,10 +145,10 @@ impl Build {
                 log::debug!(
                     "linkage of {} relative to {}",
                     path.display(),
-                    self.install.spirv_install.shader_crate.display()
+                    self.install.shader_crate.display()
                 );
                 let spv_path = path
-                    .relative_to(&self.install.spirv_install.shader_crate)
+                    .relative_to(&self.install.shader_crate)
                     .map_or(path, |path_relative_to_shader_crate| {
                         path_relative_to_shader_crate.to_path("")
                     });
@@ -128,10 +159,7 @@ impl Build {
         linkage.sort();
 
         // Write the shader manifest json file
-        let manifest_path = self
-            .build_args
-            .output_dir
-            .join(&self.build_args.manifest_file);
+        let manifest_path = self.build.output_dir.join(&self.build.manifest_file);
         let json = serde_json::to_string_pretty(&linkage)?;
         let mut file = std::fs::File::create(&manifest_path).with_context(|| {
             format!(
@@ -176,8 +204,8 @@ mod test {
             command: Command::Build(build),
         } = Cli::parse_from(args)
         {
-            assert_eq!(shader_crate_path, build.install.spirv_install.shader_crate);
-            assert_eq!(output_dir, build.build_args.output_dir);
+            assert_eq!(shader_crate_path, build.install.shader_crate);
+            assert_eq!(output_dir, build.build.output_dir);
 
             // TODO:
             // For some reason running a full build (`build.run()`) inside tests fails on Windows.
