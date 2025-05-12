@@ -91,7 +91,7 @@ package = "rustc_codegen_spirv"
 
     /// Install the binary pair and return the `(dylib_path, toolchain_channel)`.
     #[expect(clippy::too_many_lines, reason = "it's fine")]
-    pub fn run(&mut self) -> anyhow::Result<(PathBuf, String)> {
+    pub fn run(&self) -> anyhow::Result<(PathBuf, String)> {
         // Ensure the cache dir exists
         let cache_dir = cache_dir()?;
         log::info!("cache directory is '{}'", cache_dir.display());
@@ -210,7 +210,6 @@ package = "rustc_codegen_spirv"
                 .context("writing target spec files")?;
         }
 
-        self.spirv_install.dylib_path.clone_from(&dest_dylib_path);
         Ok((dest_dylib_path, toolchain_channel))
     }
 }

@@ -129,7 +129,7 @@ fn run() -> anyhow::Result<()> {
     match cli.command {
         Command::Install(install) => {
             let shader_crate_path = install.spirv_install.shader_crate;
-            let mut command =
+            let command =
                 config::Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
             log::debug!(
                 "installing with final merged arguments: {:#?}",
