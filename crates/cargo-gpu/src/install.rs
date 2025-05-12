@@ -210,7 +210,6 @@ package = "rustc_codegen_spirv"
                 .context("writing target spec files")?;
         }
 
-        self.spirv_install.dylib_path.clone_from(&dest_dylib_path);
         Ok((dest_dylib_path, toolchain_channel))
     }
 }

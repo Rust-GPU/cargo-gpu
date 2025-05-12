@@ -42,10 +42,6 @@ pub struct BuildArgs {
     reason = "cmdline args have many bools"
 )]
 pub struct InstallArgs {
-    /// path to the `rustc_codegen_spirv` dylib
-    #[clap(long, hide(true), default_value = "INTERNALLY_SET")]
-    pub dylib_path: std::path::PathBuf,
-
     /// Directory containing the shader crate to compile.
     #[clap(long, default_value = "./")]
     pub shader_crate: std::path::PathBuf,
