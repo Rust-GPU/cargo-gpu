@@ -2,9 +2,9 @@
 #![allow(clippy::unwrap_used, reason = "this is basically a test")]
 //! `cargo gpu build`, analogous to `cargo build`
 
+use crate::install::Install;
 use crate::linkage::Linkage;
 use crate::lockfile::LockfileMismatchHandler;
-use crate::{install::Install, target_spec_dir};
 use anyhow::Context as _;
 use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
 use std::io::Write as _;
@@ -59,22 +59,17 @@ pub struct Build {
 impl Build {
     /// Entrypoint
     pub fn run(&mut self) -> anyhow::Result<()> {
-        let (rustc_codegen_spirv_location, toolchain_channel) = self.install.run()?;
+        let installed_backend = self.install.run()?;
 
         let _lockfile_mismatch_handler = LockfileMismatchHandler::new(
             &self.install.shader_crate,
-            &toolchain_channel,
+            &installed_backend.toolchain_channel,
             self.install.force_overwrite_lockfiles_v4_to_v3,
         )?;
 
         let builder = &mut self.build.spirv_builder;
-        builder.rustc_codegen_spirv_location = Some(rustc_codegen_spirv_location);
-        builder.toolchain_overwrite = Some(toolchain_channel);
         builder.path_to_crate = Some(self.install.shader_crate.clone());
-        builder.path_to_target_spec = Some(target_spec_dir()?.join(format!(
-            "{}.json",
-            builder.target.as_ref().context("expect target to be set")?
-        )));
+        installed_backend.configure_spirv_builder(builder)?;
 
         // Ensure the shader output dir exists
         log::debug!(
