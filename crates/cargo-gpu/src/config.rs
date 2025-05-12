@@ -14,28 +14,9 @@ impl Config {
 
     /// Convert CLI args to their serde JSON representation.
     fn cli_args_to_json(env_args: Vec<String>) -> anyhow::Result<serde_json::Value> {
-        let mut cli_args_json = serde_json::to_value(crate::build::Build::parse_from(env_args))?;
-
-        // Move `/install/spirv_install` to `/install`
-        let spirv_install = cli_args_json
-            .pointer("/install/spirv_install")
-            .context("`/install/spirv_install` not found in config")?
-            .clone();
-        *cli_args_json
-            .get_mut("install")
-            .context("`/install` not found in config")? = spirv_install;
-
-        let build = cli_args_json
-            .pointer("/build_args")
-            .context("`/build_args` not found in config")?
-            .clone();
-
-        // Move `/build_args` to `/build`
-        let object = cli_args_json.as_object_mut().context("!")?;
-        object.remove("build_args");
-        object.insert("build".to_owned(), build);
-
-        Ok(cli_args_json)
+        Ok(serde_json::to_value(crate::build::Build::parse_from(
+            env_args,
+        ))?)
     }
 
     /// Config for the `cargo gpu build` and `cargo gpu install` can be set in the shader crate's
@@ -47,30 +28,11 @@ impl Config {
     ) -> anyhow::Result<crate::build::Build> {
         let mut config = crate::metadata::Metadata::as_json(shader_crate_path)?;
 
-        env_args = env_args
-            .into_iter()
-            .filter(|arg| !(arg == "build" || arg == "install"))
-            .collect::<Vec<_>>();
+        env_args.retain(|arg| !(arg == "build" || arg == "install"));
         let cli_args_json = Self::cli_args_to_json(env_args)?;
-
         Self::json_merge(&mut config, cli_args_json, None)?;
 
-        let build = config
-            .get("build")
-            .context("`build` not found in merged configs")?
-            .clone();
-
-        let install = config
-            .get("install")
-            .context("`install` not found in merged configs")?
-            .clone();
-
-        let args = serde_json::from_value::<crate::build::Build>(serde_json::json!({
-            "build_args": build,
-            "install": {
-                "spirv_install": install
-            }
-        }))?;
+        let args = serde_json::from_value::<crate::build::Build>(config)?;
         Ok(args)
     }
 
@@ -140,8 +102,8 @@ mod test {
             ],
         )
         .unwrap();
-        assert!(!args.build_args.spirv_builder.release);
-        assert!(args.install.spirv_install.auto_install_rust_toolchain);
+        assert!(!args.build.spirv_builder.release);
+        assert!(args.install.auto_install_rust_toolchain);
     }
 
     #[test_log::test]
@@ -161,8 +123,8 @@ mod test {
         .unwrap();
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
-        assert!(!args.build_args.spirv_builder.release);
-        assert!(args.install.spirv_install.auto_install_rust_toolchain);
+        assert!(!args.build.spirv_builder.release);
+        assert!(args.install.auto_install_rust_toolchain);
     }
 
     fn update_cargo_output_dir() -> std::path::PathBuf {
@@ -186,15 +148,9 @@ mod test {
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
         if cfg!(target_os = "windows") {
-            assert_eq!(
-                args.build_args.output_dir,
-                std::path::Path::new("C:/the/moon")
-            );
+            assert_eq!(args.build.output_dir, std::path::Path::new("C:/the/moon"));
         } else {
-            assert_eq!(
-                args.build_args.output_dir,
-                std::path::Path::new("/the/moon")
-            );
+            assert_eq!(args.build.output_dir, std::path::Path::new("/the/moon"));
         }
     }
 
@@ -212,10 +168,7 @@ mod test {
             ],
         )
         .unwrap();
-        assert_eq!(
-            args.build_args.output_dir,
-            std::path::Path::new("/the/river")
-        );
+        assert_eq!(args.build.output_dir, std::path::Path::new("/the/river"));
     }
 
     #[test_log::test]
@@ -234,7 +187,7 @@ mod test {
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
         assert_eq!(
-            args.build_args.spirv_builder.capabilities,
+            args.build.spirv_builder.capabilities,
             vec![
                 spirv_builder::Capability::AtomicStorage,
                 spirv_builder::Capability::Matrix
@@ -256,6 +209,6 @@ mod test {
             ],
         )
         .unwrap();
-        assert_eq!(args.build_args.manifest_file, "mymanifest".to_owned());
+        assert_eq!(args.build.manifest_file, "mymanifest".to_owned());
     }
 }

@@ -42,7 +42,7 @@ pub fn run() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Install(install) => {
-            let shader_crate_path = install.spirv_install.shader_crate;
+            let shader_crate_path = install.shader_crate;
             let mut command = Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
             log::debug!(
                 "installing with final merged arguments: {:#?}",
@@ -51,15 +51,15 @@ pub fn run() -> anyhow::Result<()> {
             command.install.run()?;
         }
         Command::Build(build) => {
-            let shader_crate_path = build.install.spirv_install.shader_crate;
+            let shader_crate_path = build.install.shader_crate;
             let mut command = Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
             log::debug!("building with final merged arguments: {command:#?}");
 
-            if command.build_args.watch {
+            if command.build.watch {
                 //  When watching, do one normal run to setup the `manifest.json` file.
-                command.build_args.watch = false;
+                command.build.watch = false;
                 command.run()?;
-                command.build_args.watch = true;
+                command.build.watch = true;
                 command.run()?;
             } else {
                 command.run()?;

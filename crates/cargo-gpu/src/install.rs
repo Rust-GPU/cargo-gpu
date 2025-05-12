@@ -1,6 +1,5 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
 
-use crate::args::InstallArgs;
 use crate::spirv_source::{
     get_channel_from_rustc_codegen_spirv_build_script, get_package_from_crate,
 };
@@ -11,12 +10,86 @@ use spirv_builder::TARGET_SPECS;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-/// `cargo gpu install`
-#[derive(Clone, clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
+/// Args for an install
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "cmdline args have many bools"
+)]
+#[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[non_exhaustive]
 pub struct Install {
-    /// CLI arguments for installing the Rust toolchain and components
-    #[clap(flatten)]
-    pub spirv_install: InstallArgs,
+    /// Directory containing the shader crate to compile.
+    #[clap(long, default_value = "./")]
+    pub shader_crate: PathBuf,
+
+    #[expect(
+        clippy::doc_markdown,
+        reason = "The URL should appear literally like this. But Clippy wants a markdown clickable link"
+    )]
+    /// Source of `spirv-builder` dependency
+    /// Eg: "https://github.com/Rust-GPU/rust-gpu"
+    #[clap(long)]
+    pub spirv_builder_source: Option<String>,
+
+    /// Version of `spirv-builder` dependency.
+    /// * If `--spirv-builder-source` is not set, then this is assumed to be a crates.io semantic
+    ///   version such as "0.9.0".
+    /// * If `--spirv-builder-source` is set, then this is assumed to be a Git "commitsh", such
+    ///   as a Git commit hash or a Git tag, therefore anything that `git checkout` can resolve.
+    #[clap(long, verbatim_doc_comment)]
+    pub spirv_builder_version: Option<String>,
+
+    /// Force `rustc_codegen_spirv` to be rebuilt.
+    #[clap(long)]
+    pub rebuild_codegen: bool,
+
+    /// Assume "yes" to "Install Rust toolchain: [y/n]" prompt.
+    #[clap(long, action)]
+    pub auto_install_rust_toolchain: bool,
+
+    /// Clear target dir of `rustc_codegen_spirv` build after a successful build, saves about
+    /// 200MiB of disk space.
+    #[clap(long = "no-clear-target", default_value = "true", action = clap::ArgAction::SetFalse)]
+    pub clear_target: bool,
+
+    /// There is a tricky situation where a shader crate that depends on workspace config can have
+    /// a different `Cargo.lock` lockfile version from the the workspace's `Cargo.lock`. This can
+    /// prevent builds when an old Rust toolchain doesn't recognise the newer lockfile version.
+    ///
+    /// The ideal way to resolve this would be to match the shader crate's toolchain with the
+    /// workspace's toolchain. However, that is not always possible. Another solution is to
+    /// `exclude = [...]` the problematic shader crate from the workspace. This also may not be a
+    /// suitable solution if there are a number of shader crates all sharing similar config and
+    /// you don't want to have to copy/paste and maintain that config across all the shaders.
+    ///
+    /// So a somewhat hacky workaround is to have `cargo gpu` overwrite lockfile versions. Enabling
+    /// this flag will only come into effect if there are a mix of v3/v4 lockfiles. It will also
+    /// only overwrite versions for the duration of a build. It will attempt to return the versions
+    /// to their original values once the build is finished. However, of course, unexpected errors
+    /// can occur and the overwritten values can remain. Hence why this behaviour is not enabled by
+    /// default.
+    ///
+    /// This hack is possible because the change from v3 to v4 only involves a minor change to the
+    /// way source URLs are encoded. See these PRs for more details:
+    ///   * <https://github.com/rust-lang/cargo/pull/12280>
+    ///   * <https://github.com/rust-lang/cargo/pull/14595>
+    #[clap(long, action, verbatim_doc_comment)]
+    pub force_overwrite_lockfiles_v4_to_v3: bool,
+}
+
+impl Default for Install {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            shader_crate: PathBuf::from("./"),
+            spirv_builder_source: None,
+            spirv_builder_version: None,
+            rebuild_codegen: false,
+            auto_install_rust_toolchain: false,
+            clear_target: true,
+            force_overwrite_lockfiles_v4_to_v3: false,
+        }
+    }
 }
 
 impl Install {
@@ -79,7 +152,7 @@ package = "rustc_codegen_spirv"
             let path = target_spec_dir()
                 .context("creating target spec dir")?
                 .join(filename);
-            if !path.is_file() || self.spirv_install.rebuild_codegen {
+            if !path.is_file() || self.rebuild_codegen {
                 let mut file = std::fs::File::create(&path)
                     .with_context(|| format!("creating file at [{}]", path.display()))?;
                 file.write_all(contents.as_bytes())
@@ -100,9 +173,9 @@ package = "rustc_codegen_spirv"
         })?;
 
         let source = SpirvSource::new(
-            &self.spirv_install.shader_crate,
-            self.spirv_install.spirv_builder_source.as_deref(),
-            self.spirv_install.spirv_builder_version.as_deref(),
+            &self.shader_crate,
+            self.spirv_builder_source.as_deref(),
+            self.spirv_builder_version.as_deref(),
         )?;
         let source_is_path = matches!(source, SpirvSource::Path { .. });
         let checkout = source.install_dir()?;
@@ -129,8 +202,7 @@ package = "rustc_codegen_spirv"
             }
         }
 
-        let skip_rebuild =
-            !source_is_path && dest_dylib_path.is_file() && !self.spirv_install.rebuild_codegen;
+        let skip_rebuild = !source_is_path && dest_dylib_path.is_file() && !self.rebuild_codegen;
         if skip_rebuild {
             log::info!("...and so we are aborting the install step.");
         } else {
@@ -150,7 +222,7 @@ package = "rustc_codegen_spirv"
             log::debug!("ensure_toolchain_and_components_exist");
             crate::install_toolchain::ensure_toolchain_and_components_exist(
                 &toolchain_channel,
-                self.spirv_install.auto_install_rust_toolchain,
+                self.auto_install_rust_toolchain,
             )
             .context("ensuring toolchain and components exist")?;
 
@@ -195,7 +267,7 @@ package = "rustc_codegen_spirv"
                     std::fs::rename(&dylib_path, &dest_dylib_path)
                         .context("renaming dylib path")?;
 
-                    if self.spirv_install.clear_target {
+                    if self.clear_target {
                         log::warn!("clearing target dir {}", target.display());
                         std::fs::remove_dir_all(&target).context("clearing target dir")?;
                     }
