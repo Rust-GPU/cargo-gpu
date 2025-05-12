@@ -94,11 +94,14 @@ for an example.
             * If `--spirv-builder-source` is set, then this is assumed to be a Git "commitsh", such
               as a Git commit hash or a Git tag, therefore anything that `git checkout` can resolve.
   
-        --force-spirv-cli-rebuild
+        --rebuild-codegen
             Force `rustc_codegen_spirv` to be rebuilt
   
         --auto-install-rust-toolchain
             Assume "yes" to "Install Rust toolchain: [y/n]" prompt
+  
+        --no-clear-target
+            Clear target dir of `rustc_codegen_spirv` build after a successful build, saves about 200MiB of disk space
   
         --force-overwrite-lockfiles-v4-to-v3
             There is a tricky situation where a shader crate that depends on workspace config can have
@@ -148,11 +151,14 @@ for an example.
             * If `--spirv-builder-source` is set, then this is assumed to be a Git "commitsh", such
               as a Git commit hash or a Git tag, therefore anything that `git checkout` can resolve.
   
-        --force-spirv-cli-rebuild
+        --rebuild-codegen
             Force `rustc_codegen_spirv` to be rebuilt
   
         --auto-install-rust-toolchain
             Assume "yes" to "Install Rust toolchain: [y/n]" prompt
+  
+        --no-clear-target
+            Clear target dir of `rustc_codegen_spirv` build after a successful build, saves about 200MiB of disk space
   
         --force-overwrite-lockfiles-v4-to-v3
             There is a tricky situation where a shader crate that depends on workspace config can have

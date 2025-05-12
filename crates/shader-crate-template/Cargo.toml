@@ -86,8 +86,8 @@ manifest-file = "manifest.json"
 
 # Whether to assume "yes" to the "Install Rust toolchain: [y/n]" prompt.
 auto-install-rust-toolchain = false
-# Force `spirv-builder-cli` and `rustc_codegen_spirv` to be rebuilt.
-force-spirv-cli-rebuild = false
+# Force `rustc_codegen_spirv` to be rebuilt.
+rebuild_codegen = false
 # There is a tricky situation where a shader crate that depends on workspace config can have
 # a different `Cargo.lock` lockfile version from the the workspace's `Cargo.lock`. This can
 # prevent builds when an old Rust toolchain doesn't recognise the newer lockfile version.

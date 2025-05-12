@@ -79,7 +79,7 @@ package = "rustc_codegen_spirv"
             let path = target_spec_dir()
                 .context("creating target spec dir")?
                 .join(filename);
-            if !path.is_file() || self.spirv_install.force_spirv_cli_rebuild {
+            if !path.is_file() || self.spirv_install.rebuild_codegen {
                 let mut file = std::fs::File::create(&path)
                     .with_context(|| format!("creating file at [{}]", path.display()))?;
                 file.write_all(contents.as_bytes())
@@ -129,9 +129,8 @@ package = "rustc_codegen_spirv"
             }
         }
 
-        let skip_rebuild = !source_is_path
-            && dest_dylib_path.is_file()
-            && !self.spirv_install.force_spirv_cli_rebuild;
+        let skip_rebuild =
+            !source_is_path && dest_dylib_path.is_file() && !self.spirv_install.rebuild_codegen;
         if skip_rebuild {
             log::info!("...and so we are aborting the install step.");
         } else {

@@ -69,7 +69,7 @@ pub struct InstallArgs {
 
     /// Force `rustc_codegen_spirv` to be rebuilt.
     #[clap(long)]
-    pub force_spirv_cli_rebuild: bool,
+    pub rebuild_codegen: bool,
 
     /// Assume "yes" to "Install Rust toolchain: [y/n]" prompt.
     #[clap(long, action)]
