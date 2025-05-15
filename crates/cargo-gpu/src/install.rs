@@ -16,7 +16,6 @@ use std::path::{Path, PathBuf};
     reason = "cmdline args have many bools"
 )]
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
-#[non_exhaustive]
 pub struct Install {
     /// Directory containing the shader crate to compile.
     #[clap(long, default_value = "./")]
