@@ -12,7 +12,6 @@ use std::path::PathBuf;
 
 /// Args for just a build
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
-#[non_exhaustive]
 pub struct BuildArgs {
     /// Path to the output directory for the compiled shaders.
     #[clap(long, short, default_value = "./")]
