@@ -64,6 +64,12 @@ pub mod metadata;
 pub mod show;
 pub mod spirv_source;
 
+#[expect(
+    clippy::pub_use,
+    reason = "allow build scripts to use spirv-builder without version matching"
+)]
+pub use spirv_builder;
+
 /// Central function to write to the user.
 #[macro_export]
 macro_rules! user_output {
