@@ -200,7 +200,7 @@ package = "rustc_codegen_spirv"
             self.spirv_builder_version.as_deref(),
         )?;
         let source_is_path = matches!(source, SpirvSource::Path { .. });
-        let checkout = source.install_dir()?;
+        let install_dir = source.install_dir()?;
 
         let dylib_filename = format!(
             "{}rustc_codegen_spirv{}",
@@ -210,16 +210,16 @@ package = "rustc_codegen_spirv"
 
         let dest_dylib_path;
         if source_is_path {
-            dest_dylib_path = checkout
+            dest_dylib_path = install_dir
                 .join("target")
                 .join("release")
                 .join(&dylib_filename);
         } else {
-            dest_dylib_path = checkout.join(&dylib_filename);
+            dest_dylib_path = install_dir.join(&dylib_filename);
             if dest_dylib_path.is_file() {
                 log::info!(
                     "cargo-gpu artifacts are already installed in '{}'",
-                    checkout.display()
+                    install_dir.display()
                 );
             }
         }
@@ -228,12 +228,12 @@ package = "rustc_codegen_spirv"
         if skip_rebuild {
             log::info!("...and so we are aborting the install step.");
         } else {
-            Self::write_source_files(&source, &checkout).context("writing source files")?;
+            Self::write_source_files(&source, &install_dir).context("writing source files")?;
         }
 
         // TODO cache toolchain channel in a file?
         log::debug!("resolving toolchain version to use");
-        let rustc_codegen_spirv = get_package_from_crate(&checkout, "rustc_codegen_spirv")
+        let rustc_codegen_spirv = get_package_from_crate(&install_dir, "rustc_codegen_spirv")
             .context("get `rustc_codegen_spirv` metadata")?;
         let toolchain_channel =
             get_channel_from_rustc_codegen_spirv_build_script(&rustc_codegen_spirv)
@@ -251,13 +251,14 @@ package = "rustc_codegen_spirv"
             // to prevent unsupported version errors when using older toolchains
             if !source_is_path {
                 log::debug!("remove Cargo.lock");
-                std::fs::remove_file(checkout.join("Cargo.lock")).context("remove Cargo.lock")?;
+                std::fs::remove_file(install_dir.join("Cargo.lock"))
+                    .context("remove Cargo.lock")?;
             }
 
             crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source,);
             let mut build_command = std::process::Command::new("cargo");
             build_command
-                .current_dir(&checkout)
+                .current_dir(&install_dir)
                 .arg(format!("+{toolchain_channel}"))
                 .args(["build", "--release"])
                 .env_remove("RUSTC");
@@ -281,7 +282,7 @@ package = "rustc_codegen_spirv"
                 })
                 .context("running build command")?;
 
-            let target = checkout.join("target");
+            let target = install_dir.join("target");
             let dylib_path = target.join("release").join(&dylib_filename);
             if dylib_path.is_file() {
                 log::info!("successfully built {}", dylib_path.display());
