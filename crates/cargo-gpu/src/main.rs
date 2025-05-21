@@ -59,6 +59,7 @@ mod build;
 mod config;
 mod install;
 mod install_toolchain;
+mod legacy_target_specs;
 mod linkage;
 mod lockfile;
 mod metadata;
@@ -199,13 +200,6 @@ fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
     } else {
         dir
     })
-}
-
-/// Location of the target spec metadata files
-fn target_spec_dir() -> anyhow::Result<std::path::PathBuf> {
-    let dir = cache_dir()?.join("target-specs");
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
 }
 
 /// Convenience function for internal use. Dumps all the CLI usage instructions. Useful for
