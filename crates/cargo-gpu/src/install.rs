@@ -1,7 +1,7 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
 
 use crate::spirv_source::{
-    get_channel_from_rustc_codegen_spirv_build_script, get_package_from_crate,
+    get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
 };
 use crate::{cache_dir, spirv_source::SpirvSource, target_spec_dir};
 use anyhow::Context as _;
@@ -233,11 +233,15 @@ package = "rustc_codegen_spirv"
 
         // TODO cache toolchain channel in a file?
         log::debug!("resolving toolchain version to use");
-        let rustc_codegen_spirv = get_package_from_crate(&install_dir, "rustc_codegen_spirv")
-            .context("get `rustc_codegen_spirv` metadata")?;
+        let crate_metadata = query_metadata(&install_dir)
+            .context("resolving toolchain version: get `rustc_codegen_spirv_dummy` metadata")?;
+        let rustc_codegen_spirv = crate_metadata.find_package("rustc_codegen_spirv").context(
+            "resolving toolchain version: expected a dependency on `rustc_codegen_spirv`",
+        )?;
         let toolchain_channel =
-            get_channel_from_rustc_codegen_spirv_build_script(&rustc_codegen_spirv)
-                .context("read toolchain from `rustc_codegen_spirv`'s build.rs")?;
+            get_channel_from_rustc_codegen_spirv_build_script(rustc_codegen_spirv).context(
+                "resolving toolchain version: read toolchain from `rustc_codegen_spirv`'s build.rs",
+            )?;
         log::info!("selected toolchain channel `{toolchain_channel:?}`");
 
         if !skip_rebuild {

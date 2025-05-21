@@ -7,7 +7,7 @@
 use anyhow::Context as _;
 use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::semver::Version;
-use cargo_metadata::{MetadataCommand, Package};
+use cargo_metadata::{Metadata, MetadataCommand, Package};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -96,8 +96,9 @@ impl SpirvSource {
 
     /// Look into the shader crate to get the version of `rust-gpu` it's using.
     pub fn get_rust_gpu_deps_from_shader(shader_crate_path: &Path) -> anyhow::Result<Self> {
-        let spirv_std_package = get_package_from_crate(shader_crate_path, "spirv-std")?;
-        let spirv_source = Self::parse_spirv_std_source_and_version(&spirv_std_package)?;
+        let crate_metadata = query_metadata(shader_crate_path)?;
+        let spirv_std_package = crate_metadata.find_package("spirv-std")?;
+        let spirv_source = Self::parse_spirv_std_source_and_version(spirv_std_package)?;
         log::debug!(
             "Parsed `SpirvSource` from crate `{}`: \
             {spirv_source:?}",
@@ -175,49 +176,41 @@ impl SpirvSource {
     }
 }
 
-/// Make sure shader crate path is absolute and canonical.
-fn crate_path_canonical(shader_crate_path: &Path) -> anyhow::Result<PathBuf> {
-    let mut canonical_path = shader_crate_path.to_path_buf();
-
-    if !canonical_path.is_absolute() {
-        let cwd = std::env::current_dir().context("no cwd")?;
-        canonical_path = cwd.join(canonical_path);
-    }
-    canonical_path = canonical_path
-        .canonicalize()
-        .context("could not get absolute path to shader crate")?;
-
-    if !canonical_path.is_dir() {
-        log::error!(
-            "{} is not a directory, aborting",
-            shader_crate_path.display()
-        );
-        anyhow::bail!("{} is not a directory", shader_crate_path.display());
-    }
-    Ok(canonical_path)
+/// get the Package metadata from some crate
+pub fn query_metadata(crate_path: &Path) -> anyhow::Result<Metadata> {
+    log::debug!("Running `cargo metadata` on `{}`", crate_path.display());
+    let metadata = MetadataCommand::new()
+        .current_dir(
+            &crate_path
+                .canonicalize()
+                .context("could not get absolute path to shader crate")?,
+        )
+        .exec()?;
+    Ok(metadata)
 }
 
-/// get the Package metadata from some crate
-pub fn get_package_from_crate(crate_path: &Path, crate_name: &str) -> anyhow::Result<Package> {
-    let canonical_crate_path = crate_path_canonical(crate_path)?;
+/// implements [`Self::find_package`]
+pub trait FindPackage {
+    /// Search for a package or return a nice error
+    fn find_package(&self, crate_name: &str) -> anyhow::Result<&Package>;
+}
 
-    log::debug!(
-        "Running `cargo metadata` on `{}` to query for package `{crate_name}`",
-        canonical_crate_path.display()
-    );
-    let metadata = MetadataCommand::new()
-        .current_dir(&canonical_crate_path)
-        .exec()?;
-
-    let Some(package) = metadata
-        .packages
-        .into_iter()
-        .find(|package| package.name.eq(crate_name))
-    else {
-        anyhow::bail!("`{crate_name}` not found in `Cargo.toml` at `{canonical_crate_path:?}`");
-    };
-    log::trace!("  found `{}` version `{}`", package.name, package.version);
-    Ok(package)
+impl FindPackage for Metadata {
+    fn find_package(&self, crate_name: &str) -> anyhow::Result<&Package> {
+        if let Some(package) = self
+            .packages
+            .iter()
+            .find(|package| package.name.eq(crate_name))
+        {
+            log::trace!("  found `{}` version `{}`", package.name, package.version);
+            Ok(package)
+        } else {
+            anyhow::bail!(
+                "`{crate_name}` not found in `Cargo.toml` at `{:?}`",
+                self.workspace_root
+            );
+        }
+    }
 }
 
 /// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
