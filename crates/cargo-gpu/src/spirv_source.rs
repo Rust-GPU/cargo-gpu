@@ -188,8 +188,11 @@ fn crate_path_canonical(shader_crate_path: &Path) -> anyhow::Result<PathBuf> {
         .context("could not get absolute path to shader crate")?;
 
     if !canonical_path.is_dir() {
-        log::error!("{shader_crate_path:?} is not a directory, aborting");
-        anyhow::bail!("{shader_crate_path:?} is not a directory");
+        log::error!(
+            "{} is not a directory, aborting",
+            shader_crate_path.display()
+        );
+        anyhow::bail!("{} is not a directory", shader_crate_path.display());
     }
     Ok(canonical_path)
 }

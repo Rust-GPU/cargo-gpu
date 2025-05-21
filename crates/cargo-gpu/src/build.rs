@@ -51,7 +51,7 @@ impl Build {
         );
         std::fs::create_dir_all(&self.build_args.output_dir)?;
         let canonicalized = self.build_args.output_dir.canonicalize()?;
-        log::debug!("canonicalized output dir: {canonicalized:?}");
+        log::debug!("canonicalized output dir: {}", canonicalized.display());
         self.build_args.output_dir = canonicalized;
 
         // Ensure the shader crate exists
