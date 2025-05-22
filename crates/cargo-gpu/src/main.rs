@@ -55,11 +55,11 @@ use clap::Parser as _;
 use install::Install;
 use show::Show;
 
-mod args;
 mod build;
 mod config;
 mod install;
 mod install_toolchain;
+mod legacy_target_specs;
 mod linkage;
 mod lockfile;
 mod metadata;
@@ -128,8 +128,8 @@ fn run() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Install(install) => {
-            let shader_crate_path = install.spirv_install.shader_crate;
-            let mut command =
+            let shader_crate_path = install.shader_crate;
+            let command =
                 config::Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
             log::debug!(
                 "installing with final merged arguments: {:#?}",
@@ -138,16 +138,16 @@ fn run() -> anyhow::Result<()> {
             command.install.run()?;
         }
         Command::Build(build) => {
-            let shader_crate_path = build.install.spirv_install.shader_crate;
+            let shader_crate_path = build.install.shader_crate;
             let mut command =
                 config::Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
             log::debug!("building with final merged arguments: {command:#?}");
 
-            if command.build_args.watch {
+            if command.build.watch {
                 //  When watching, do one normal run to setup the `manifest.json` file.
-                command.build_args.watch = false;
+                command.build.watch = false;
                 command.run()?;
-                command.build_args.watch = true;
+                command.build.watch = true;
                 command.run()?;
             } else {
                 command.run()?;
@@ -200,13 +200,6 @@ fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
     } else {
         dir
     })
-}
-
-/// Location of the target spec metadata files
-fn target_spec_dir() -> anyhow::Result<std::path::PathBuf> {
-    let dir = cache_dir()?.join("target-specs");
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
 }
 
 /// Convenience function for internal use. Dumps all the CLI usage instructions. Useful for
