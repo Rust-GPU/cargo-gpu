@@ -1,6 +1,6 @@
 //! main executable of cargo gpu
 use cargo_gpu::Cli;
-use clap::Parser;
+use clap::Parser as _;
 
 fn main() {
     #[cfg(debug_assertions)]
@@ -27,7 +27,7 @@ fn main() {
 }
 
 /// Wrappable "main" to catch errors.
-pub fn run() -> anyhow::Result<()> {
+fn run() -> anyhow::Result<()> {
     let env_args = std::env::args()
         .filter(|arg| {
             // Calling our `main()` with the cargo subcommand `cargo gpu` passes "gpu"

@@ -94,6 +94,7 @@ macro_rules! user_output {
 
 /// All of the available subcommands for `cargo gpu`
 #[derive(clap::Subcommand)]
+#[non_exhaustive]
 pub enum Command {
     /// Install rust-gpu compiler artifacts.
     Install(Box<Install>),
@@ -112,7 +113,11 @@ pub enum Command {
 }
 
 impl Command {
-    /// run the command
+    /// Runs the command
+    ///
+    /// # Errors
+    /// Any errors during execution, usually printed to the user
+    #[inline]
     pub fn run(&self, env_args: Vec<String>) -> anyhow::Result<()> {
         match &self {
             Self::Install(install) => {
@@ -152,6 +157,7 @@ impl Command {
 /// the Cli struct representing the main cli
 #[derive(clap::Parser)]
 #[clap(author, version, about, subcommand_required = true)]
+#[non_exhaustive]
 pub struct Cli {
     /// The command to run.
     #[clap(subcommand)]
@@ -159,6 +165,10 @@ pub struct Cli {
 }
 
 /// The central cache directory of cargo gpu
+///
+/// # Errors
+/// may fail if we can't find the user home directory
+#[inline]
 pub fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
     let dir = directories::BaseDirs::new()
         .with_context(|| "could not find the user home directory")?
