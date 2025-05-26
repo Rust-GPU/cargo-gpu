@@ -11,12 +11,67 @@ use log::{info, trace};
 use spirv_builder::SpirvBuilder;
 use std::path::{Path, PathBuf};
 
+/// Represents a functional backend installation, whether it was cached or just installed.
+#[derive(Clone, Debug)]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "never adding private members to this struct"
+)]
+pub struct InstalledBackend {
+    /// path to the `rustc_codegen_spirv` dylib
+    pub rustc_codegen_spirv_location: PathBuf,
+    /// toolchain channel name
+    pub toolchain_channel: String,
+    /// directory with target-specs json files
+    pub target_spec_dir: PathBuf,
+}
+
+impl InstalledBackend {
+    /// Creates a new `SpirvBuilder` configured to use this installed backend.
+    #[expect(
+        clippy::missing_panics_doc,
+        clippy::expect_used,
+        reason = "unreachable"
+    )]
+    #[expect(clippy::impl_trait_in_params, reason = "forwarding spirv-builder API")]
+    #[inline]
+    pub fn to_spirv_builder(
+        &self,
+        path_to_crate: impl AsRef<Path>,
+        target: impl Into<String>,
+    ) -> SpirvBuilder {
+        let mut builder = SpirvBuilder::new(path_to_crate, target);
+        self.configure_spirv_builder(&mut builder)
+            .expect("unreachable");
+        builder
+    }
+
+    /// Configures the supplied [`SpirvBuilder`]. `SpirvBuilder.target` must be set and must not change after calling this function.
+    ///
+    /// # Errors
+    /// if `SpirvBuilder.target` is not set
+    #[inline]
+    pub fn configure_spirv_builder(&self, builder: &mut SpirvBuilder) -> anyhow::Result<()> {
+        builder.rustc_codegen_spirv_location = Some(self.rustc_codegen_spirv_location.clone());
+        builder.toolchain_overwrite = Some(self.toolchain_channel.clone());
+        builder.path_to_target_spec = Some(self.target_spec_dir.join(format!(
+            "{}.json",
+            builder.target.as_ref().context("expect target to be set")?
+        )));
+        Ok(())
+    }
+}
+
 /// Args for an install
 #[expect(
     clippy::struct_excessive_bools,
     reason = "cmdline args have many bools"
 )]
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "never adding private members to this struct"
+)]
 pub struct Install {
     /// Directory containing the shader crate to compile.
     #[clap(long, default_value = "./")]
@@ -81,7 +136,9 @@ pub struct Install {
 
 impl Install {
     /// Create a default install for a shader crate of some path
-    pub fn from_shader_crate(shader_crate: PathBuf) -> Self {
+    #[inline]
+    #[must_use]
+    pub const fn from_shader_crate(shader_crate: PathBuf) -> Self {
         Self {
             shader_crate,
             spirv_builder_source: None,
@@ -92,45 +149,7 @@ impl Install {
             force_overwrite_lockfiles_v4_to_v3: false,
         }
     }
-}
 
-/// Represents a functional backend installation, whether it was cached or just installed.
-#[derive(Clone, Debug)]
-pub struct InstalledBackend {
-    /// path to the `rustc_codegen_spirv` dylib
-    pub rustc_codegen_spirv_location: PathBuf,
-    /// toolchain channel name
-    pub toolchain_channel: String,
-    /// directory with target-specs json files
-    pub target_spec_dir: PathBuf,
-}
-
-impl InstalledBackend {
-    /// Creates a new `SpirvBuilder` configured to use this installed backend.
-    pub fn to_spirv_builder(
-        &self,
-        path_to_crate: impl AsRef<Path>,
-        target: impl Into<String>,
-    ) -> SpirvBuilder {
-        let mut builder = SpirvBuilder::new(path_to_crate, target);
-        self.configure_spirv_builder(&mut builder)
-            .expect("unreachable");
-        builder
-    }
-
-    /// Configures the supplied [`SpirvBuilder`]. `SpirvBuilder.target` must be set and must not change after calling this function.
-    pub fn configure_spirv_builder(&self, builder: &mut SpirvBuilder) -> anyhow::Result<()> {
-        builder.rustc_codegen_spirv_location = Some(self.rustc_codegen_spirv_location.clone());
-        builder.toolchain_overwrite = Some(self.toolchain_channel.clone());
-        builder.path_to_target_spec = Some(self.target_spec_dir.join(format!(
-            "{}.json",
-            builder.target.as_ref().context("expect target to be set")?
-        )));
-        Ok(())
-    }
-}
-
-impl Install {
     /// Create the `rustc_codegen_spirv_dummy` crate that depends on `rustc_codegen_spirv`
     fn write_source_files(source: &SpirvSource, checkout: &Path) -> anyhow::Result<()> {
         // skip writing a dummy project if we use a local rust-gpu checkout
@@ -252,7 +271,11 @@ package = "rustc_codegen_spirv"
         Ok(target_specs_dst)
     }
 
-    /// Install the binary pair and return the `(dylib_path, toolchain_channel)`.
+    /// Install the binary pair and return the [`InstalledBackend`], from which you can create [`SpirvBuilder`] instances.
+    ///
+    /// # Errors
+    /// If the installation somehow fails.
+    #[inline]
     #[expect(clippy::too_many_lines, reason = "it's fine")]
     pub fn run(&self) -> anyhow::Result<InstalledBackend> {
         // Ensure the cache dir exists

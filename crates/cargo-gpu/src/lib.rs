@@ -1,3 +1,5 @@
+#![expect(clippy::pub_use, reason = "pub use for build scripts")]
+
 //! Rust GPU shader crate builder.
 //!
 //! This program and library allows you to easily compile your rust-gpu shaders,
