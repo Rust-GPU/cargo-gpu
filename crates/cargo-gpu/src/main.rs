@@ -124,40 +124,8 @@ fn run() -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>();
     log::trace!("CLI args: {env_args:#?}");
-    let cli = Cli::parse_from(env_args.clone());
-
-    match cli.command {
-        Command::Install(install) => {
-            let shader_crate_path = install.shader_crate;
-            let command =
-                config::Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
-            log::debug!(
-                "installing with final merged arguments: {:#?}",
-                command.install
-            );
-            command.install.run()?;
-        }
-        Command::Build(build) => {
-            let shader_crate_path = build.install.shader_crate;
-            let mut command =
-                config::Config::clap_command_with_cargo_config(&shader_crate_path, env_args)?;
-            log::debug!("building with final merged arguments: {command:#?}");
-
-            if command.build.watch {
-                //  When watching, do one normal run to setup the `manifest.json` file.
-                command.build.watch = false;
-                command.run()?;
-                command.build.watch = true;
-                command.run()?;
-            } else {
-                command.run()?;
-            }
-        }
-        Command::Show(show) => show.run()?,
-        Command::DumpUsage => dump_full_usage_for_readme()?,
-    }
-
-    Ok(())
+    let cli = Cli::parse_from(&env_args);
+    cli.command.run(env_args)
 }
 
 /// All of the available subcommands for `cargo gpu`
@@ -179,6 +147,45 @@ enum Command {
     DumpUsage,
 }
 
+impl Command {
+    /// run the command
+    pub fn run(&self, env_args: Vec<String>) -> anyhow::Result<()> {
+        match &self {
+            Self::Install(install) => {
+                let shader_crate_path = &install.shader_crate;
+                let command =
+                    config::Config::clap_command_with_cargo_config(shader_crate_path, env_args)?;
+                log::debug!(
+                    "installing with final merged arguments: {:#?}",
+                    command.install
+                );
+                command.install.run()?;
+            }
+            Self::Build(build) => {
+                let shader_crate_path = &build.install.shader_crate;
+                let mut command =
+                    config::Config::clap_command_with_cargo_config(shader_crate_path, env_args)?;
+                log::debug!("building with final merged arguments: {command:#?}");
+
+                if command.build.watch {
+                    //  When watching, do one normal run to setup the `manifest.json` file.
+                    command.build.watch = false;
+                    command.run()?;
+                    command.build.watch = true;
+                    command.run()?;
+                } else {
+                    command.run()?;
+                }
+            }
+            Self::Show(show) => show.run()?,
+            Self::DumpUsage => dump_full_usage_for_readme()?,
+        }
+
+        Ok(())
+    }
+}
+
+/// the Cli struct representing the main cli
 #[derive(clap::Parser)]
 #[clap(author, version, about, subcommand_required = true)]
 pub(crate) struct Cli {

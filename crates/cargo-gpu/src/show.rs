@@ -33,7 +33,7 @@ pub struct Show {
 
 impl Show {
     /// Entrypoint
-    pub fn run(self) -> anyhow::Result<()> {
+    pub fn run(&self) -> anyhow::Result<()> {
         log::info!("{:?}: ", self.command);
 
         #[expect(
@@ -41,17 +41,17 @@ impl Show {
             reason = "The output of this command could potentially be used in a script, \
                       so we _don't_ want to use `crate::user_output`, as that prefixes a crab."
         )]
-        match self.command {
+        match &self.command {
             Info::CacheDirectory => {
                 println!("{}\n", cache_dir()?.display());
             }
             Info::SpirvSource(SpirvSourceDep { shader_crate }) => {
                 let rust_gpu_source =
-                    crate::spirv_source::SpirvSource::get_rust_gpu_deps_from_shader(&shader_crate)?;
+                    crate::spirv_source::SpirvSource::get_rust_gpu_deps_from_shader(shader_crate)?;
                 println!("{rust_gpu_source}\n");
             }
             Info::Commitsh => {
-                println!("{}", std::env!("GIT_HASH"));
+                println!("{}", env!("GIT_HASH"));
             }
             Info::Capabilities => {
                 println!("All available options to the `cargo gpu build --capabilities` argument:");
