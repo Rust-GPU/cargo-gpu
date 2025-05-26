@@ -9,7 +9,7 @@ crate-type = ["rlib", "cdylib"]
 # Dependencies for CPU and GPU code
 [dependencies]
 # TODO: use a simple crate version once v0.10.0 is released
-spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "82a0f69" }
+spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "86fc48032c4cd4afb74f1d81ae859711d20386a1" }
 
 # Dependencies for GPU code
 [target.'cfg(target_arch = "spirv")'.dependencies]

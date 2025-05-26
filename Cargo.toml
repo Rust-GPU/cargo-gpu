@@ -13,7 +13,7 @@ exclude = [
 resolver = "2"
 
 [workspace.dependencies]
-spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu.git", rev = "6d7c1cd6c0920500a3fa8c01c23e7b74302c15c4", default-features = false }
+spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu.git", rev = "86fc48032c4cd4afb74f1d81ae859711d20386a1", default-features = false }
 anyhow = "1.0.94"
 clap = { version = "4.5.37", features = ["derive"] }
 crossterm = "0.28.1"
@@ -28,6 +28,9 @@ tempdir = "0.3.7"
 test-log = "0.2.16"
 cargo_metadata = "0.19.2"
 semver = "1.0.26"
+
+# This crate MUST NEVER be upgraded, we need this particular "first" version to support old rust-gpu builds
+legacy_target_specs = { package = "rustc_codegen_spirv-target-specs", version = "0.9.0", features = ["include_str"] }
 
 [workspace.lints.rust]
 missing_docs = "warn"

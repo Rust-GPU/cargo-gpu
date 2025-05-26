@@ -1,13 +1,14 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
 
+use crate::legacy_target_specs::write_legacy_target_specs;
 use crate::spirv_source::{
     get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
 };
-use crate::{cache_dir, spirv_source::SpirvSource, target_spec_dir};
+use crate::{cache_dir, spirv_source::SpirvSource};
 use anyhow::Context as _;
-use log::trace;
-use spirv_builder::{SpirvBuilder, TARGET_SPECS};
-use std::io::Write as _;
+use cargo_metadata::Metadata;
+use log::{info, trace};
+use spirv_builder::SpirvBuilder;
 use std::path::{Path, PathBuf};
 
 /// Args for an install
@@ -83,6 +84,8 @@ pub struct InstalledBackend {
     pub rustc_codegen_spirv_location: PathBuf,
     /// toolchain channel name
     pub toolchain_channel: String,
+    /// directory with target-specs json files
+    pub target_spec_dir: PathBuf,
 }
 
 impl InstalledBackend {
@@ -90,7 +93,7 @@ impl InstalledBackend {
     pub fn configure_spirv_builder(&self, builder: &mut SpirvBuilder) -> anyhow::Result<()> {
         builder.rustc_codegen_spirv_location = Some(self.rustc_codegen_spirv_location.clone());
         builder.toolchain_overwrite = Some(self.toolchain_channel.clone());
-        builder.path_to_target_spec = Some(target_spec_dir()?.join(format!(
+        builder.path_to_target_spec = Some(self.target_spec_dir.join(format!(
             "{}.json",
             builder.target.as_ref().context("expect target to be set")?
         )));
@@ -169,20 +172,70 @@ package = "rustc_codegen_spirv"
         Ok(())
     }
 
-    /// Add the target spec files to the crate.
-    fn write_target_spec_files(&self) -> anyhow::Result<()> {
-        for (filename, contents) in TARGET_SPECS {
-            let path = target_spec_dir()
-                .context("creating target spec dir")?
-                .join(filename);
-            if !path.is_file() || self.rebuild_codegen {
-                let mut file = std::fs::File::create(&path)
-                    .with_context(|| format!("creating file at [{}]", path.display()))?;
-                file.write_all(contents.as_bytes())
-                    .context("writing to file")?;
+    /// Copy spec files from one dir to another, assuming no subdirectories
+    fn copy_spec_files(src: &Path, dst: &Path) -> anyhow::Result<()> {
+        info!(
+            "Copy target specs from {:?} to {:?}",
+            src.display(),
+            dst.display()
+        );
+        std::fs::create_dir_all(dst)?;
+        let dir = std::fs::read_dir(src)?;
+        for dir_entry in dir {
+            let file = dir_entry?;
+            let file_path = file.path();
+            if file_path.is_file() {
+                std::fs::copy(file_path, dst.join(file.file_name()))?;
             }
         }
         Ok(())
+    }
+
+    /// Add the target spec files to the crate.
+    fn update_spec_files(
+        &self,
+        source: &SpirvSource,
+        install_dir: &Path,
+        dummy_metadata: &Metadata,
+        skip_rebuild: bool,
+    ) -> anyhow::Result<PathBuf> {
+        let mut target_specs_dst = install_dir.join("target-specs");
+        if !skip_rebuild {
+            if let Ok(target_specs) =
+                dummy_metadata.find_package("rustc_codegen_spirv-target-specs")
+            {
+                let target_specs_src = target_specs
+                    .manifest_path
+                    .as_std_path()
+                    .parent()
+                    .and_then(|p| {
+                        let src = p.join("target-specs");
+                        src.is_dir().then_some(src)
+                    })
+                    .context("Could not find `target-specs` directory within `rustc_codegen_spirv-target-specs` dependency")?;
+                if source.is_path() {
+                    // skip copy
+                    target_specs_dst = target_specs_src;
+                } else {
+                    // copy over the target-specs
+                    Self::copy_spec_files(&target_specs_src, &target_specs_dst)
+                        .context("copying target-specs json files")?;
+                }
+            } else {
+                // use legacy target specs bundled with cargo gpu
+                if source.is_path() {
+                    // This is a stupid situation:
+                    // * We can't be certain that there are `target-specs` in the local checkout (there may be some in `spirv-builder`)
+                    // * We can't dump our legacy ones into the `install_dir`, as that would modify the local rust-gpu checkout
+                    // -> do what the old cargo gpu did, one global dir for all target specs
+                    // and hope parallel runs don't shred each other
+                    target_specs_dst = cache_dir()?.join("legacy-target-specs-for-local-checkout");
+                }
+                write_legacy_target_specs(&target_specs_dst, self.rebuild_codegen)?;
+            }
+        }
+
+        Ok(target_specs_dst)
     }
 
     /// Install the binary pair and return the `(dylib_path, toolchain_channel)`.
@@ -245,6 +298,11 @@ package = "rustc_codegen_spirv"
             )?;
         log::info!("selected toolchain channel `{toolchain_channel:?}`");
 
+        log::debug!("update_spec_files");
+        let target_spec_dir = self
+            .update_spec_files(&source, &install_dir, &dummy_metadata, skip_rebuild)
+            .context("writing target spec files")?;
+
         if !skip_rebuild {
             log::debug!("ensure_toolchain_and_components_exist");
             crate::install_toolchain::ensure_toolchain_and_components_exist(
@@ -304,15 +362,12 @@ package = "rustc_codegen_spirv"
                 log::error!("could not find {}", dylib_path.display());
                 anyhow::bail!("`rustc_codegen_spirv` build failed");
             }
-
-            log::debug!("write_target_spec_files");
-            self.write_target_spec_files()
-                .context("writing target spec files")?;
         }
 
         Ok(InstalledBackend {
             rustc_codegen_spirv_location: dest_dylib_path,
             toolchain_channel,
+            target_spec_dir,
         })
     }
 }

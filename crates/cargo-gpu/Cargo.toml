@@ -14,6 +14,7 @@ default-run = "cargo-gpu"
 cargo_metadata.workspace = true
 anyhow.workspace = true
 spirv-builder = { workspace = true, features = ["clap", "watch"] }
+legacy_target_specs.workspace = true
 clap.workspace = true
 directories.workspace = true
 env_logger.workspace = true
