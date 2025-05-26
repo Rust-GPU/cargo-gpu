@@ -117,7 +117,7 @@ impl Install {
     /// Create the `rustc_codegen_spirv_dummy` crate that depends on `rustc_codegen_spirv`
     fn write_source_files(source: &SpirvSource, checkout: &Path) -> anyhow::Result<()> {
         // skip writing a dummy project if we use a local rust-gpu checkout
-        if matches!(source, SpirvSource::Path { .. }) {
+        if source.is_path() {
             return Ok(());
         }
         log::debug!(
@@ -141,10 +141,12 @@ impl Install {
                 }
                 SpirvSource::Git { url, rev } => format!("git = \"{url}\"\nrev = \"{rev}\""),
                 SpirvSource::Path {
-                    rust_gpu_repo_root: rust_gpu_path,
+                    rust_gpu_repo_root,
                     version,
                 } => {
-                    let mut new_path = rust_gpu_path.to_owned();
+                    // this branch is currently unreachable, as we just build `rustc_codegen_spirv` directly,
+                    // since we don't need the `dummy` crate to make cargo download it for us
+                    let mut new_path = rust_gpu_repo_root.to_owned();
                     new_path.push("crates/spirv-builder");
                     format!("path = \"{new_path}\"\nversion = \"{version}\"")
                 }
@@ -198,7 +200,6 @@ package = "rustc_codegen_spirv"
             self.spirv_builder_source.as_deref(),
             self.spirv_builder_version.as_deref(),
         )?;
-        let source_is_path = matches!(source, SpirvSource::Path { .. });
         let install_dir = source.install_dir()?;
 
         let dylib_filename = format!(
@@ -208,7 +209,7 @@ package = "rustc_codegen_spirv"
         );
 
         let dest_dylib_path;
-        if source_is_path {
+        if source.is_path() {
             dest_dylib_path = install_dir
                 .join("target")
                 .join("release")
@@ -223,7 +224,8 @@ package = "rustc_codegen_spirv"
             }
         }
 
-        let skip_rebuild = !source_is_path && dest_dylib_path.is_file() && !self.rebuild_codegen;
+        // if `source` is a path, always rebuild
+        let skip_rebuild = !source.is_path() && dest_dylib_path.is_file() && !self.rebuild_codegen;
         if skip_rebuild {
             log::info!("...and so we are aborting the install step.");
         } else {
@@ -232,9 +234,9 @@ package = "rustc_codegen_spirv"
 
         // TODO cache toolchain channel in a file?
         log::debug!("resolving toolchain version to use");
-        let crate_metadata = query_metadata(&install_dir)
+        let dummy_metadata = query_metadata(&install_dir)
             .context("resolving toolchain version: get `rustc_codegen_spirv_dummy` metadata")?;
-        let rustc_codegen_spirv = crate_metadata.find_package("rustc_codegen_spirv").context(
+        let rustc_codegen_spirv = dummy_metadata.find_package("rustc_codegen_spirv").context(
             "resolving toolchain version: expected a dependency on `rustc_codegen_spirv`",
         )?;
         let toolchain_channel =
@@ -252,7 +254,7 @@ package = "rustc_codegen_spirv"
             .context("ensuring toolchain and components exist")?;
 
             // to prevent unsupported version errors when using older toolchains
-            if !source_is_path {
+            if !source.is_path() {
                 log::debug!("remove Cargo.lock");
                 std::fs::remove_file(install_dir.join("Cargo.lock"))
                     .context("remove Cargo.lock")?;
@@ -265,7 +267,7 @@ package = "rustc_codegen_spirv"
                 .arg(format!("+{toolchain_channel}"))
                 .args(["build", "--release"])
                 .env_remove("RUSTC");
-            if source_is_path {
+            if source.is_path() {
                 build_command.args(["-p", "rustc_codegen_spirv", "--lib"]);
             }
 
@@ -289,7 +291,7 @@ package = "rustc_codegen_spirv"
             let dylib_path = target.join("release").join(&dylib_filename);
             if dylib_path.is_file() {
                 log::info!("successfully built {}", dylib_path.display());
-                if !source_is_path {
+                if !source.is_path() {
                     std::fs::rename(&dylib_path, &dest_dylib_path)
                         .context("renaming dylib path")?;
 

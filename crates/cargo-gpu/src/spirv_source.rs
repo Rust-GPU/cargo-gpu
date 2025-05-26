@@ -122,6 +122,11 @@ impl SpirvSource {
         }
     }
 
+    /// Returns true if self is a Path
+    pub const fn is_path(&self) -> bool {
+        matches!(self, Self::Path { .. })
+    }
+
     /// Parse a string like:
     ///   `spirv-std v0.9.0 (https://github.com/Rust-GPU/rust-gpu?rev=54f6978c#54f6978c) (*)`
     /// Which would return:
