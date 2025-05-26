@@ -44,6 +44,8 @@ pub struct Install {
     pub rebuild_codegen: bool,
 
     /// Assume "yes" to "Install Rust toolchain: [y/n]" prompt.
+    ///
+    /// Defaults to `false` in cli, `true` in [`Default`]
     #[clap(long, action)]
     pub auto_install_rust_toolchain: bool,
 
@@ -77,6 +79,21 @@ pub struct Install {
     pub force_overwrite_lockfiles_v4_to_v3: bool,
 }
 
+impl Install {
+    /// Create a default install for a shader crate of some path
+    pub fn from_shader_crate(shader_crate: PathBuf) -> Self {
+        Self {
+            shader_crate,
+            spirv_builder_source: None,
+            spirv_builder_version: None,
+            rebuild_codegen: false,
+            auto_install_rust_toolchain: true,
+            clear_target: true,
+            force_overwrite_lockfiles_v4_to_v3: false,
+        }
+    }
+}
+
 /// Represents a functional backend installation, whether it was cached or just installed.
 #[derive(Clone, Debug)]
 pub struct InstalledBackend {
@@ -89,6 +106,18 @@ pub struct InstalledBackend {
 }
 
 impl InstalledBackend {
+    /// Creates a new `SpirvBuilder` configured to use this installed backend.
+    pub fn to_spirv_builder(
+        &self,
+        path_to_crate: impl AsRef<Path>,
+        target: impl Into<String>,
+    ) -> SpirvBuilder {
+        let mut builder = SpirvBuilder::new(path_to_crate, target);
+        self.configure_spirv_builder(&mut builder)
+            .expect("unreachable");
+        builder
+    }
+
     /// Configures the supplied [`SpirvBuilder`]. `SpirvBuilder.target` must be set and must not change after calling this function.
     pub fn configure_spirv_builder(&self, builder: &mut SpirvBuilder) -> anyhow::Result<()> {
         builder.rustc_codegen_spirv_location = Some(self.rustc_codegen_spirv_location.clone());
@@ -98,21 +127,6 @@ impl InstalledBackend {
             builder.target.as_ref().context("expect target to be set")?
         )));
         Ok(())
-    }
-}
-
-impl Default for Install {
-    #[inline]
-    fn default() -> Self {
-        Self {
-            shader_crate: PathBuf::from("./"),
-            spirv_builder_source: None,
-            spirv_builder_version: None,
-            rebuild_codegen: false,
-            auto_install_rust_toolchain: false,
-            clear_target: true,
-            force_overwrite_lockfiles_v4_to_v3: false,
-        }
     }
 }
 

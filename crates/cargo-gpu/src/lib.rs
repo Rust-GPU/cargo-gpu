@@ -52,7 +52,6 @@ use anyhow::Context as _;
 
 use crate::dump_usage::dump_full_usage_for_readme;
 use build::Build;
-use install::Install;
 use show::Show;
 
 mod build;
@@ -67,6 +66,9 @@ mod metadata;
 mod show;
 mod spirv_source;
 mod test;
+
+pub use install::*;
+pub use spirv_builder;
 
 /// Central function to write to the user.
 #[macro_export]
