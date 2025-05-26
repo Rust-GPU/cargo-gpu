@@ -208,8 +208,8 @@ package = "rustc_codegen_spirv"
                     .manifest_path
                     .as_std_path()
                     .parent()
-                    .and_then(|p| {
-                        let src = p.join("target-specs");
+                    .and_then(|root| {
+                        let src = root.join("target-specs");
                         src.is_dir().then_some(src)
                     })
                     .context("Could not find `target-specs` directory within `rustc_codegen_spirv-target-specs` dependency")?;
