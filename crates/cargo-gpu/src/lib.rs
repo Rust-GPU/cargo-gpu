@@ -52,7 +52,6 @@ use anyhow::Context as _;
 
 use crate::dump_usage::dump_full_usage_for_readme;
 use build::Build;
-use clap::Parser as _;
 use install::Install;
 use show::Show;
 
@@ -93,47 +92,9 @@ macro_rules! user_output {
    }
 }
 
-fn main() {
-    #[cfg(debug_assertions)]
-    std::env::set_var("RUST_BACKTRACE", "1");
-
-    env_logger::builder().init();
-
-    if let Err(error) = run() {
-        log::error!("{error:?}");
-
-        #[expect(
-            clippy::print_stderr,
-            reason = "Our central place for outputting error messages"
-        )]
-        {
-            eprintln!("Error: {error}");
-
-            // `clippy::exit` seems to be a false positive in `main()`.
-            // See: https://github.com/rust-lang/rust-clippy/issues/13518
-            #[expect(clippy::restriction, reason = "Our central place for safely exiting")]
-            std::process::exit(1);
-        };
-    }
-}
-
-/// Wrappable "main" to catch errors.
-fn run() -> anyhow::Result<()> {
-    let env_args = std::env::args()
-        .filter(|arg| {
-            // Calling our `main()` with the cargo subcommand `cargo gpu` passes "gpu"
-            // as the first parameter, so we want to ignore it.
-            arg != "gpu"
-        })
-        .collect::<Vec<_>>();
-    log::trace!("CLI args: {env_args:#?}");
-    let cli = Cli::parse_from(&env_args);
-    cli.command.run(env_args)
-}
-
 /// All of the available subcommands for `cargo gpu`
 #[derive(clap::Subcommand)]
-enum Command {
+pub enum Command {
     /// Install rust-gpu compiler artifacts.
     Install(Box<Install>),
 
@@ -191,13 +152,14 @@ impl Command {
 /// the Cli struct representing the main cli
 #[derive(clap::Parser)]
 #[clap(author, version, about, subcommand_required = true)]
-pub(crate) struct Cli {
+pub struct Cli {
     /// The command to run.
     #[clap(subcommand)]
-    command: Command,
+    pub command: Command,
 }
 
-fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
+/// The central cache directory of cargo gpu
+pub fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
     let dir = directories::BaseDirs::new()
         .with_context(|| "could not find the user home directory")?
         .cache_dir()
