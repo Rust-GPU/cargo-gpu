@@ -2,11 +2,13 @@
 
 use anyhow::Context as _;
 use naga::error::ShaderError;
-pub use naga::valid::Capabilities;
+use naga::valid::Capabilities;
 use naga::valid::ModuleInfo;
 use naga::Module;
 use spirv_builder::{CompileResult, GenericCompileResult};
 use std::path::{Path, PathBuf};
+
+pub use naga;
 
 /// Naga [`Module`] with [`ModuleInfo`]
 #[derive(Clone, Debug)]
@@ -80,33 +82,42 @@ impl CompileResultNagaExt for CompileResult {
 )]
 pub struct NagaTranspile(pub GenericCompileResult<NagaModule>);
 
-impl NagaTranspile {
-    /// Transpile to wgsl source code, typically for webgpu compatibility.
-    ///
-    /// Returns a [`CompileResult`] of wgsl source code files and their associated wgsl entry points.
-    ///
-    /// # Errors
-    /// converting naga module to wgsl may fail
-    #[inline]
-    #[cfg(feature = "wgsl-out")]
-    pub fn to_wgsl(
-        &self,
-        writer_flags: naga::back::wgsl::WriterFlags,
-    ) -> anyhow::Result<CompileResult> {
-        self.0.try_map(
-            |entry| Ok(crate::linkage::spv_entry_point_to_wgsl(entry)),
-            |module| {
-                let inner = || -> anyhow::Result<_> {
-                    let wgsl_dst = module.spv_path.with_extension("wgsl");
-                    let wgsl =
-                        naga::back::wgsl::write_string(&module.module, &module.info, writer_flags)
-                            .context("naga conversion to wgsl failed")?;
-                    std::fs::write(&wgsl_dst, wgsl).context("failed to write wgsl file")?;
-                    Ok(wgsl_dst)
-                };
-                inner()
-                    .with_context(|| format!("transpiling to wgsl '{}'", module.spv_path.display()))
-            },
-        )
+/// feature gate `wgsl-out`
+#[cfg(feature = "wgsl-out")]
+mod wgsl_out {
+    use crate::NagaTranspile;
+    use anyhow::Context as _;
+    use naga::back::wgsl::WriterFlags;
+    use spirv_builder::CompileResult;
+
+    impl NagaTranspile {
+        /// Transpile to wgsl source code, typically for webgpu compatibility.
+        ///
+        /// Returns a [`CompileResult`] of wgsl source code files and their associated wgsl entry points.
+        ///
+        /// # Errors
+        /// converting naga module to wgsl may fail
+        #[inline]
+        pub fn to_wgsl(&self, writer_flags: WriterFlags) -> anyhow::Result<CompileResult> {
+            self.0.try_map(
+                |entry| Ok(crate::linkage::spv_entry_point_to_wgsl(entry)),
+                |module| {
+                    let inner = || -> anyhow::Result<_> {
+                        let wgsl_dst = module.spv_path.with_extension("wgsl");
+                        let wgsl = naga::back::wgsl::write_string(
+                            &module.module,
+                            &module.info,
+                            writer_flags,
+                        )
+                        .context("naga conversion to wgsl failed")?;
+                        std::fs::write(&wgsl_dst, wgsl).context("failed to write wgsl file")?;
+                        Ok(wgsl_dst)
+                    };
+                    inner().with_context(|| {
+                        format!("transpiling to wgsl '{}'", module.spv_path.display())
+                    })
+                },
+            )
+        }
     }
 }
