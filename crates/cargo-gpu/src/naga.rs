@@ -1,16 +1,31 @@
 //! naga transpiling to wgsl support, hidden behind feature `naga`
 
-use crate::linkage::spv_entry_point_to_wgsl;
 use anyhow::Context as _;
 use naga::error::ShaderError;
 pub use naga::valid::Capabilities;
-use spirv_builder::{CompileResult, ModuleResult};
-use std::collections::BTreeMap;
+use naga::valid::ModuleInfo;
+use naga::Module;
+use spirv_builder::{CompileResult, GenericCompileResult};
 use std::path::{Path, PathBuf};
 
+/// Naga [`Module`] with [`ModuleInfo`]
+#[derive(Clone, Debug)]
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "never adding private members to this struct"
+)]
+pub struct NagaModule {
+    /// path to the original spv
+    pub spv_path: PathBuf,
+    /// naga shader [`Module`]
+    pub module: Module,
+    /// naga [`ModuleInfo`] from validation
+    pub info: ModuleInfo,
+}
+
 /// convert a single spv file to a wgsl file using naga
-fn spv_to_wgsl(spv_src: &Path, wgsl_dst: &Path, capabilities: Capabilities) -> anyhow::Result<()> {
-    let inner = || -> anyhow::Result<()> {
+fn parse_spv(spv_src: &Path, capabilities: Capabilities) -> anyhow::Result<NagaModule> {
+    let inner = || -> anyhow::Result<_> {
         let spv_bytes = std::fs::read(spv_src).context("could not read spv file")?;
         let opts = naga::front::spv::Options::default();
         let module = naga::front::spv::parse_u8_slice(&spv_bytes, &opts)
@@ -30,69 +45,68 @@ fn spv_to_wgsl(spv_src: &Path, wgsl_dst: &Path, capabilities: Capabilities) -> a
                 inner: Box::new(err),
             })
             .context("validation of naga module failed")?;
-        let wgsl =
-            naga::back::wgsl::write_string(&module, &info, naga::back::wgsl::WriterFlags::empty())
-                .context("naga conversion to wgsl failed")?;
-        std::fs::write(wgsl_dst, wgsl).context("failed to write wgsl file")?;
-        Ok(())
+        Ok(NagaModule {
+            module,
+            info,
+            spv_path: PathBuf::from(spv_src),
+        })
     };
-    inner().with_context(|| {
-        format!(
-            "converting spv '{}' to wgsl '{}' failed    ",
-            spv_src.display(),
-            wgsl_dst.display()
-        )
-    })
-}
-
-/// convert spv file path to a valid unique wgsl file path
-fn wgsl_file_name(path: &Path) -> PathBuf {
-    path.with_extension("wgsl")
+    inner().with_context(|| format!("parsing spv '{}' failed", spv_src.display()))
 }
 
 /// Extension trait for naga transpiling
 pub trait CompileResultNagaExt {
-    /// Transpile the spirv binaries to wgsl source code using [`naga`], typically for webgpu compatibility.
-    ///
-    /// Converts this [`CompileResult`] of spirv binaries and entry points to a [`CompileResult`] pointing to wgsl source code files and their associated wgsl entry
-    /// points.
+    /// Transpile the spirv binaries to some other format using [`naga`].
     ///
     /// # Errors
     /// [`naga`] transpile may error in various ways
-    fn transpile_to_wgsl(&self, capabilities: Capabilities) -> anyhow::Result<CompileResult>;
+    fn naga_transpile(&self, capabilities: Capabilities) -> anyhow::Result<NagaTranspile>;
 }
 
 impl CompileResultNagaExt for CompileResult {
     #[inline]
-    fn transpile_to_wgsl(&self, capabilities: Capabilities) -> anyhow::Result<CompileResult> {
-        Ok(match &self.module {
-            ModuleResult::SingleModule(spv) => {
-                let wgsl = wgsl_file_name(spv);
-                spv_to_wgsl(spv, &wgsl, capabilities)?;
-                let entry_points = self
-                    .entry_points
-                    .iter()
-                    .map(|entry| spv_entry_point_to_wgsl(entry))
-                    .collect();
-                Self {
-                    entry_points,
-                    module: ModuleResult::SingleModule(wgsl),
-                }
-            }
-            ModuleResult::MultiModule(map) => {
-                let new_map: BTreeMap<String, PathBuf> = map
-                    .iter()
-                    .map(|(entry_point, spv)| {
-                        let wgsl = wgsl_file_name(spv);
-                        spv_to_wgsl(spv, &wgsl, capabilities)?;
-                        Ok((spv_entry_point_to_wgsl(entry_point), wgsl))
-                    })
-                    .collect::<anyhow::Result<_>>()?;
-                Self {
-                    entry_points: new_map.keys().cloned().collect(),
-                    module: ModuleResult::MultiModule(new_map),
-                }
-            }
-        })
+    fn naga_transpile(&self, capabilities: Capabilities) -> anyhow::Result<NagaTranspile> {
+        Ok(NagaTranspile(self.try_map(
+            |entry| Ok(entry.clone()),
+            |spv| parse_spv(spv, capabilities),
+        )?))
+    }
+}
+
+/// Main struct for naga transpilation
+#[expect(
+    clippy::exhaustive_structs,
+    reason = "never adding private members to this struct"
+)]
+pub struct NagaTranspile(pub GenericCompileResult<NagaModule>);
+
+impl NagaTranspile {
+    /// Transpile to wgsl source code, typically for webgpu compatibility.
+    ///
+    /// Returns a [`CompileResult`] of wgsl source code files and their associated wgsl entry points.
+    ///
+    /// # Errors
+    /// converting naga module to wgsl may fail
+    #[inline]
+    #[cfg(feature = "wgsl-out")]
+    pub fn to_wgsl(
+        &self,
+        writer_flags: naga::back::wgsl::WriterFlags,
+    ) -> anyhow::Result<CompileResult> {
+        self.0.try_map(
+            |entry| Ok(crate::linkage::spv_entry_point_to_wgsl(entry)),
+            |module| {
+                let inner = || -> anyhow::Result<_> {
+                    let wgsl_dst = module.spv_path.with_extension("wgsl");
+                    let wgsl =
+                        naga::back::wgsl::write_string(&module.module, &module.info, writer_flags)
+                            .context("naga conversion to wgsl failed")?;
+                    std::fs::write(&wgsl_dst, wgsl).context("failed to write wgsl file")?;
+                    Ok(wgsl_dst)
+                };
+                inner()
+                    .with_context(|| format!("transpiling to wgsl '{}'", module.spv_path.display()))
+            },
+        )
     }
 }

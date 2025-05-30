@@ -11,8 +11,10 @@ default-run = "cargo-gpu"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-# Enable naga support to convert spirv to wgsl
+# Enable naga transpiling
 naga = ["dep:naga"]
+# Enable naga transpiling to wgsl
+wgsl-out = ["naga", "naga/wgsl-out"]
 
 [dependencies]
 cargo_metadata.workspace = true
@@ -28,7 +30,7 @@ serde.workspace = true
 serde_json.workspace = true
 crossterm.workspace = true
 semver.workspace = true
-naga = { workspace = true, optional = true, features = ["spv-in", "wgsl-out"] }
+naga = { workspace = true, optional = true, features = ["spv-in"] }
 
 [dev-dependencies]
 test-log.workspace = true
