@@ -162,11 +162,10 @@ impl Install {
         );
 
         {
-            trace!("writing dummy main.rs");
-            let main = "fn main() {}";
+            trace!("writing dummy lib.rs");
             let src = checkout.join("src");
-            std::fs::create_dir_all(&src).context("creating directory for 'src'")?;
-            std::fs::write(src.join("main.rs"), main).context("writing 'main.rs'")?;
+            std::fs::create_dir_all(&src).context("creating 'src' directory")?;
+            std::fs::File::create(src.join("lib.rs")).context("creating 'src/lib.rs'")?;
         };
 
         {
