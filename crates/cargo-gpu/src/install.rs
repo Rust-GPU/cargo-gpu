@@ -7,7 +7,6 @@ use crate::spirv_source::{
 use crate::{cache_dir, spirv_source::SpirvSource};
 use anyhow::Context as _;
 use cargo_metadata::Metadata;
-use log::{info, trace};
 use spirv_builder::SpirvBuilder;
 use std::path::{Path, PathBuf};
 
@@ -162,14 +161,14 @@ impl Install {
         );
 
         {
-            trace!("writing dummy lib.rs");
+            log::trace!("writing dummy lib.rs");
             let src = checkout.join("src");
             std::fs::create_dir_all(&src).context("creating 'src' directory")?;
             std::fs::File::create(src.join("lib.rs")).context("creating 'src/lib.rs'")?;
         };
 
         {
-            trace!("writing dummy Cargo.toml");
+            log::trace!("writing dummy Cargo.toml");
             let version_spec = match &source {
                 SpirvSource::CratesIO(version) => {
                     format!("version = \"{version}\"")
@@ -206,11 +205,6 @@ package = "rustc_codegen_spirv"
 
     /// Copy spec files from one dir to another, assuming no subdirectories
     fn copy_spec_files(src: &Path, dst: &Path) -> anyhow::Result<()> {
-        info!(
-            "Copy target specs from {:?} to {:?}",
-            src.display(),
-            dst.display()
-        );
         std::fs::create_dir_all(dst)?;
         let dir = std::fs::read_dir(src)?;
         for dir_entry in dir {
@@ -225,7 +219,6 @@ package = "rustc_codegen_spirv"
 
     /// Add the target spec files to the crate.
     fn update_spec_files(
-        &self,
         source: &SpirvSource,
         install_dir: &Path,
         dummy_metadata: &Metadata,
@@ -236,6 +229,11 @@ package = "rustc_codegen_spirv"
             if let Ok(target_specs) =
                 dummy_metadata.find_package("rustc_codegen_spirv-target-specs")
             {
+                log::info!(
+                    "target-specs: found crate `rustc_codegen_spirv-target-specs` with manifest at `{}`", 
+                    target_specs.manifest_path
+                );
+
                 let target_specs_src = target_specs
                     .manifest_path
                     .as_std_path()
@@ -247,9 +245,17 @@ package = "rustc_codegen_spirv"
                     .context("Could not find `target-specs` directory within `rustc_codegen_spirv-target-specs` dependency")?;
                 if source.is_path() {
                     // skip copy
+                    log::info!(
+                        "target-specs: source is local path, use target-specs from `{}`",
+                        target_specs_src.display()
+                    );
                     target_specs_dst = target_specs_src;
                 } else {
                     // copy over the target-specs
+                    log::info!(
+                        "target-specs: Copy target specs from `{}`",
+                        target_specs_src.display()
+                    );
                     Self::copy_spec_files(&target_specs_src, &target_specs_dst)
                         .context("copying target-specs json files")?;
                 }
@@ -263,7 +269,11 @@ package = "rustc_codegen_spirv"
                     // and hope parallel runs don't shred each other
                     target_specs_dst = cache_dir()?.join("legacy-target-specs-for-local-checkout");
                 }
-                write_legacy_target_specs(&target_specs_dst, self.rebuild_codegen)?;
+                log::info!(
+                    "target-specs: Writing legacy target specs to `{}`",
+                    target_specs_dst.display()
+                );
+                write_legacy_target_specs(&target_specs_dst)?;
             }
         }
 
@@ -335,9 +345,9 @@ package = "rustc_codegen_spirv"
         log::info!("selected toolchain channel `{toolchain_channel:?}`");
 
         log::debug!("update_spec_files");
-        let target_spec_dir = self
-            .update_spec_files(&source, &install_dir, &dummy_metadata, skip_rebuild)
-            .context("writing target spec files")?;
+        let target_spec_dir =
+            Self::update_spec_files(&source, &install_dir, &dummy_metadata, skip_rebuild)
+                .context("writing target spec files")?;
 
         if !skip_rebuild {
             log::debug!("ensure_toolchain_and_components_exist");
