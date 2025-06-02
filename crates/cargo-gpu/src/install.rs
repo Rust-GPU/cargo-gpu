@@ -28,9 +28,8 @@ pub struct InstalledBackend {
 impl InstalledBackend {
     /// Creates a new `SpirvBuilder` configured to use this installed backend.
     #[expect(
-        clippy::missing_panics_doc,
-        clippy::expect_used,
-        reason = "unreachable"
+        clippy::unreachable,
+        reason = "it's unreachable, no need to return a Result"
     )]
     #[expect(clippy::impl_trait_in_params, reason = "forwarding spirv-builder API")]
     #[inline]
@@ -41,7 +40,7 @@ impl InstalledBackend {
     ) -> SpirvBuilder {
         let mut builder = SpirvBuilder::new(path_to_crate, target);
         self.configure_spirv_builder(&mut builder)
-            .expect("unreachable");
+            .unwrap_or_else(|_| unreachable!("we set target before calling this function"));
         builder
     }
 
