@@ -12,10 +12,7 @@ use std::path::{Path, PathBuf};
 
 /// Represents a functional backend installation, whether it was cached or just installed.
 #[derive(Clone, Debug)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "never adding private members to this struct"
-)]
+#[non_exhaustive]
 pub struct InstalledBackend {
     /// path to the `rustc_codegen_spirv` dylib
     pub rustc_codegen_spirv_location: PathBuf,
@@ -66,10 +63,7 @@ impl InstalledBackend {
     reason = "cmdline args have many bools"
 )]
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "never adding private members to this struct"
-)]
+#[non_exhaustive]
 pub struct Install {
     /// Directory containing the shader crate to compile.
     #[clap(long, default_value = "./")]
