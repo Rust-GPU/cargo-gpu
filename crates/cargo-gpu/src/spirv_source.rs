@@ -88,8 +88,12 @@ impl SpirvSource {
                 Self::CratesIO(Version::parse(rust_gpu_version)?)
             }
         } else {
-            Self::get_rust_gpu_deps_from_shader(shader_crate_path)
-                .context("get_rust_gpu_deps_from_shader")?
+            Self::get_rust_gpu_deps_from_shader(shader_crate_path).with_context(|| {
+                format!(
+                    "get spirv-std dependency from shader crate '{}'",
+                    shader_crate_path.display()
+                )
+            })?
         };
         Ok(source)
     }
