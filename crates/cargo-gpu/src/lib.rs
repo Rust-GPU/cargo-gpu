@@ -65,11 +65,15 @@ mod legacy_target_specs;
 mod linkage;
 mod lockfile;
 mod metadata;
+#[cfg(feature = "naga")]
+mod naga;
 mod show;
 mod spirv_source;
 mod test;
 
 pub use install::*;
+#[cfg(feature = "naga")]
+pub use naga::*;
 pub use spirv_builder;
 
 /// Central function to write to the user.
