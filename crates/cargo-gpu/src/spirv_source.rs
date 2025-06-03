@@ -148,8 +148,8 @@ impl SpirvSource {
                     let parse_git = || {
                         let link = &source.repr.get(4..)?;
                         let sharp_index = link.find('#')?;
-                        let question_mark_index = link.find('?')?;
-                        let url = link.get(..question_mark_index)?.to_owned();
+                        let url_end = link.find('?').unwrap_or(sharp_index);
+                        let url = link.get(..url_end)?.to_owned();
                         let rev = link.get(sharp_index + 1..)?.to_owned();
                         Some(Self::Git { url, rev })
                     };
@@ -248,6 +248,7 @@ pub fn get_channel_from_rustc_codegen_spirv_build_script(
 #[cfg(test)]
 mod test {
     use super::*;
+    use cargo_metadata::{PackageBuilder, PackageId, Source};
 
     #[test_log::test]
     fn parsing_spirv_std_dep_for_shader_template() {
@@ -280,5 +281,51 @@ mod test {
             .map(std::string::ToString::to_string)
             .unwrap();
         assert_eq!("https___github_com_Rust-GPU_rust-gpu+86fc4803", &name);
+    }
+
+    #[test_log::test]
+    fn parse_git_with_rev() {
+        let source = parse_git(
+            "git+https://github.com/Rust-GPU/rust-gpu?rev=86fc48032c4cd4afb74f1d81ae859711d20386a1#86fc4803",
+        );
+        assert_eq!(
+            source,
+            SpirvSource::Git {
+                url: "https://github.com/Rust-GPU/rust-gpu".to_owned(),
+                rev: "86fc4803".to_owned(),
+            }
+        )
+    }
+
+    #[test_log::test]
+    fn parse_git_no_question_mark() {
+        // taken directly from Graphite
+        let source = parse_git(
+            "git+https://github.com/Rust-GPU/rust-gpu.git#6e2c84d4fe64e32df4c060c5a7f3e35a32e45421",
+        );
+        assert_eq!(
+            source,
+            SpirvSource::Git {
+                url: "https://github.com/Rust-GPU/rust-gpu.git".to_owned(),
+                rev: "6e2c84d4fe64e32df4c060c5a7f3e35a32e45421".to_owned(),
+            }
+        )
+    }
+
+    fn parse_git(source: &str) -> SpirvSource {
+        let package = PackageBuilder::new(
+            "spirv-std",
+            Version::new(0, 9, 0),
+            PackageId {
+                repr: "".to_owned(),
+            },
+            "",
+        )
+        .source(Some(Source {
+            repr: source.to_owned(),
+        }))
+        .build()
+        .unwrap();
+        SpirvSource::parse_spirv_std_source_and_version(&package).unwrap()
     }
 }
