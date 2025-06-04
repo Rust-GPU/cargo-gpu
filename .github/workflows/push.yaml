@@ -50,6 +50,12 @@ jobs:
         run: |
           rustup default stable
           rustup update
+      - name: Fetch root dependencies
+        run: cargo fetch --locked
+      - name: Fetch shader-crate-template dependencies
+        run: |
+          cd ./crates/shader-crate-template
+          cargo fetch --locked
       - run: cargo test
       - name: Run a full build
         run: cargo xtask test-build --rust-gpu-version ${{ matrix.rust-gpu-version }}
