@@ -363,7 +363,8 @@ package = "rustc_codegen_spirv"
                 .current_dir(&install_dir)
                 .arg(format!("+{toolchain_channel}"))
                 .args(["build", "--release"])
-                .env_remove("RUSTC");
+                .env_remove("RUSTC")
+                .env_remove("RUSTFLAGS");
             if source.is_path() {
                 build_command.args(["-p", "rustc_codegen_spirv", "--lib"]);
             }
