@@ -5,8 +5,8 @@ edition = "2021"
 description = "Generates shader .spv files from rust-gpu shader crates"
 repository = "https://github.com/Rust-GPU/cargo-gpu"
 readme = "../../README.md"
-keywords = ["gpu", "compiler"]
-build = "build.rs"
+keywords = ["gpu", "compiler", "rust-gpu"]
+license = "MIT OR Apache-2.0"
 default-run = "cargo-gpu"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
