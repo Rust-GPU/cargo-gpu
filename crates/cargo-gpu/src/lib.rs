@@ -61,12 +61,12 @@ mod config;
 mod dump_usage;
 mod install;
 mod install_toolchain;
-mod legacy_target_specs;
 mod linkage;
 mod lockfile;
 mod metadata;
 mod show;
 mod spirv_source;
+mod target_specs;
 mod test;
 
 pub use install::*;
