@@ -23,8 +23,13 @@ impl Linkage {
                 .map(|comp| comp.as_os_str().to_string_lossy())
                 .collect::<Vec<_>>()
                 .join("/"),
-            wgsl_entry_point: entry_point.as_ref().replace("::", ""),
+            wgsl_entry_point: spv_entry_point_to_wgsl(entry_point.as_ref()),
             entry_point: entry_point.as_ref().to_owned(),
         }
     }
+}
+
+/// Convert a spirv entry point to a valid wgsl entry point
+pub fn spv_entry_point_to_wgsl(entry_point: &str) -> String {
+    entry_point.replace("::", "")
 }

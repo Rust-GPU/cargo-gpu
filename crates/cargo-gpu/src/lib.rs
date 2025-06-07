@@ -64,12 +64,16 @@ mod install_toolchain;
 mod linkage;
 mod lockfile;
 mod metadata;
+#[cfg(feature = "naga")]
+mod naga_transpile;
 mod show;
 mod spirv_source;
 mod target_specs;
 mod test;
 
 pub use install::*;
+#[cfg(feature = "naga")]
+pub use naga_transpile::*;
 pub use spirv_builder;
 
 /// Central function to write to the user.
