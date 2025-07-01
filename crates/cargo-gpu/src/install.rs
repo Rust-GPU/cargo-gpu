@@ -6,7 +6,7 @@ use crate::spirv_source::{
 use crate::target_specs::update_target_specs_files;
 use crate::{cache_dir, spirv_source::SpirvSource};
 use anyhow::Context as _;
-use spirv_builder::SpirvBuilder;
+use spirv_builder::{IntoSpirvTarget, SpirvBuilder};
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -33,7 +33,7 @@ impl InstalledBackend {
     pub fn to_spirv_builder(
         &self,
         path_to_crate: impl AsRef<Path>,
-        target: impl Into<String>,
+        target: impl IntoSpirvTarget,
     ) -> SpirvBuilder {
         let mut builder = SpirvBuilder::new(path_to_crate, target);
         self.configure_spirv_builder(&mut builder)
@@ -49,10 +49,12 @@ impl InstalledBackend {
     pub fn configure_spirv_builder(&self, builder: &mut SpirvBuilder) -> anyhow::Result<()> {
         builder.rustc_codegen_spirv_location = Some(self.rustc_codegen_spirv_location.clone());
         builder.toolchain_overwrite = Some(self.toolchain_channel.clone());
-        builder.path_to_target_spec = Some(self.target_spec_dir.join(format!(
-            "{}.json",
-            builder.target.as_ref().context("expect target to be set")?
-        )));
+        let file_name = builder
+            .target
+            .clone()
+            .context("expect target to be set")??
+            .target_json_file_name();
+        builder.path_to_target_spec = Some(self.target_spec_dir.join(file_name));
         Ok(())
     }
 }
