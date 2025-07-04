@@ -294,7 +294,7 @@ mod test {
                 url: "https://github.com/Rust-GPU/rust-gpu".to_owned(),
                 rev: "86fc4803".to_owned(),
             }
-        )
+        );
     }
 
     #[test_log::test]
@@ -309,7 +309,7 @@ mod test {
                 url: "https://github.com/Rust-GPU/rust-gpu.git".to_owned(),
                 rev: "6e2c84d4fe64e32df4c060c5a7f3e35a32e45421".to_owned(),
             }
-        )
+        );
     }
 
     fn parse_git(source: &str) -> SpirvSource {
@@ -317,7 +317,7 @@ mod test {
             "spirv-std",
             Version::new(0, 9, 0),
             PackageId {
-                repr: "".to_owned(),
+                repr: String::new(),
             },
             "",
         )

@@ -7,6 +7,7 @@ use crate::target_specs::update_target_specs_files;
 use crate::{cache_dir, spirv_source::SpirvSource};
 use anyhow::Context as _;
 use spirv_builder::SpirvBuilder;
+use std::env;
 use std::path::{Path, PathBuf};
 
 /// Represents a functional backend installation, whether it was cached or just installed.
@@ -279,20 +280,33 @@ package = "rustc_codegen_spirv"
             }
 
             crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source,);
-            let mut build_command = std::process::Command::new("cargo");
-            build_command
+            let mut cargo = std::process::Command::new("cargo");
+            cargo
                 .current_dir(&install_dir)
                 .arg(format!("+{toolchain_channel}"))
-                .args(["build", "--release"])
-                .env_remove("RUSTC")
-                .env_remove("RUSTFLAGS");
+                .args(["build", "--release"]);
             if source.is_path() {
-                build_command.args(["-p", "rustc_codegen_spirv", "--lib"]);
+                cargo.args(["-p", "rustc_codegen_spirv", "--lib"]);
             }
 
-            log::debug!("building artifacts with `{build_command:?}`");
+            // Clear Cargo environment variables that we don't want to leak into the
+            // inner invocation of Cargo and mess with our `rustc_codegen_spirv` build.
+            for (key, _) in env::vars_os() {
+                let remove = key.to_str().is_some_and(|st| {
+                    st.starts_with("CARGO_FEATURES_") || st.starts_with("CARGO_CFG_")
+                });
+                if remove {
+                    cargo.env_remove(key);
+                }
+            }
+            cargo
+                .env_remove("RUSTC")
+                .env_remove("RUSTFLAGS")
+                // ignore any externally supplied target dir, we want to build it in our cache dir
+                .env_remove("CARGO_TARGET_DIR");
 
-            build_command
+            log::debug!("building artifacts with `{cargo:?}`");
+            cargo
                 .stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit())
                 .output()
