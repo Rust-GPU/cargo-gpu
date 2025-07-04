@@ -292,8 +292,8 @@ package = "rustc_codegen_spirv"
             // Clear Cargo environment variables that we don't want to leak into the
             // inner invocation of Cargo and mess with our `rustc_codegen_spirv` build.
             for (key, _) in env::vars_os() {
-                let remove = key.to_str().is_some_and(|s| {
-                    s.starts_with("CARGO_FEATURES_") || s.starts_with("CARGO_CFG_")
+                let remove = key.to_str().is_some_and(|st| {
+                    st.starts_with("CARGO_FEATURES_") || st.starts_with("CARGO_CFG_")
                 });
                 if remove {
                     cargo.env_remove(key);
