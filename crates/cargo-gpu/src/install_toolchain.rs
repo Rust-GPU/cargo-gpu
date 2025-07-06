@@ -1,6 +1,9 @@
 //! toolchain installation logic
 
 use anyhow::Context as _;
+use crossterm::tty::IsTty as _;
+
+use crate::user_output;
 
 /// Use `rustup` to install the toolchain and components, if not already installed.
 ///
@@ -103,9 +106,17 @@ fn get_consent_for_toolchain_install(
     if skip_toolchain_install_consent {
         return Ok(());
     }
+
+    if !std::io::stdout().is_tty() {
+        user_output!("No TTY detected so can't ask for consent to install Rust toolchain.");
+        log::error!("Attempted to ask for consent when there's no TTY");
+        #[expect(clippy::exit, reason = "can't ask for user consent if there's no TTY")]
+        std::process::exit(1);
+    }
+
     log::debug!("asking for consent to install the required toolchain");
     crossterm::terminal::enable_raw_mode().context("enabling raw mode")?;
-    crate::user_output!("{prompt} [y/n]: \n");
+    crate::user_output!("{prompt} [y/n]: ");
     let mut input = crossterm::event::read().context("reading crossterm event")?;
 
     if let crossterm::event::Event::Key(crossterm::event::KeyEvent {
