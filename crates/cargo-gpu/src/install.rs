@@ -301,6 +301,7 @@ package = "rustc_codegen_spirv"
             }
             cargo
                 .env_remove("RUSTC")
+                .env_remove("RUSTC_WRAPPER")
                 .env_remove("RUSTFLAGS")
                 // ignore any externally supplied target dir, we want to build it in our cache dir
                 .env_remove("CARGO_TARGET_DIR");
