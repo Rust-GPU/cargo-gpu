@@ -7,7 +7,6 @@ use crate::target_specs::update_target_specs_files;
 use crate::{cache_dir, spirv_source::SpirvSource};
 use anyhow::Context as _;
 use spirv_builder::SpirvBuilder;
-use std::env;
 use std::path::{Path, PathBuf};
 
 /// Represents a functional backend installation, whether it was cached or just installed.
@@ -279,8 +278,8 @@ package = "rustc_codegen_spirv"
                     .context("remove Cargo.lock")?;
             }
 
-            crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source,);
-            let mut cargo = std::process::Command::new("cargo");
+            crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source);
+            let mut cargo = spirv_builder::cargo_cmd::CargoCmd::new();
             cargo
                 .current_dir(&install_dir)
                 .arg(format!("+{toolchain_channel}"))
@@ -289,24 +288,7 @@ package = "rustc_codegen_spirv"
                 cargo.args(["-p", "rustc_codegen_spirv", "--lib"]);
             }
 
-            // Clear Cargo environment variables that we don't want to leak into the
-            // inner invocation of Cargo and mess with our `rustc_codegen_spirv` build.
-            for (key, _) in env::vars_os() {
-                let remove = key.to_str().is_some_and(|st| {
-                    st.starts_with("CARGO_FEATURES_") || st.starts_with("CARGO_CFG_")
-                });
-                if remove {
-                    cargo.env_remove(key);
-                }
-            }
-            cargo
-                .env_remove("RUSTC")
-                .env_remove("RUSTC_WRAPPER")
-                .env_remove("RUSTFLAGS")
-                // ignore any externally supplied target dir, we want to build it in our cache dir
-                .env_remove("CARGO_TARGET_DIR");
-
-            log::debug!("building artifacts with `{cargo:?}`");
+            log::debug!("building artifacts with `{cargo}`");
             cargo
                 .stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit())
