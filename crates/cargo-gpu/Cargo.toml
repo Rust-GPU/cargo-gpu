@@ -28,6 +28,7 @@ semver.workspace = true
 [dev-dependencies]
 test-log.workspace = true
 cargo_metadata = { workspace = true, features = ["builder"] }
+cargo-util-schemas = "0.8.2"
 
 [lints]
 workspace = true

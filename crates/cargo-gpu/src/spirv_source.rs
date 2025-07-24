@@ -209,7 +209,7 @@ impl FindPackage for Metadata {
         if let Some(package) = self
             .packages
             .iter()
-            .find(|package| package.name.eq(crate_name))
+            .find(|package| package.name.as_str() == crate_name)
         {
             log::trace!("  found `{}` version `{}`", package.name, package.version);
             Ok(package)
@@ -249,6 +249,7 @@ pub fn get_channel_from_rustc_codegen_spirv_build_script(
 mod test {
     use super::*;
     use cargo_metadata::{PackageBuilder, PackageId, Source};
+    use cargo_util_schemas::manifest::PackageName;
 
     #[test_log::test]
     fn parsing_spirv_std_dep_for_shader_template() {
@@ -314,7 +315,7 @@ mod test {
 
     fn parse_git(source: &str) -> SpirvSource {
         let package = PackageBuilder::new(
-            "spirv-std",
+            PackageName::new("spirv-std".to_owned()).unwrap(),
             Version::new(0, 9, 0),
             PackageId {
                 repr: String::new(),
