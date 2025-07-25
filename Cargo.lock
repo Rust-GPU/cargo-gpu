@@ -833,7 +833,7 @@ checksum = "6c89eaf493b3dfc730cda42a77014aad65e03213992c7afe0dff60a9f7d3dd94"
 [[package]]
 name = "rustc_codegen_spirv-target-specs"
 version = "0.9.0"
-source = "git+https://github.com/Rust-GPU/rust-gpu?rev=08917152504679eda474e952e79c711012920b36#08917152504679eda474e952e79c711012920b36"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=84e977ffe1060bb05311e47122c642b0a9f23d90#84e977ffe1060bb05311e47122c642b0a9f23d90"
 dependencies = [
  "serde",
  "strum",
@@ -843,7 +843,7 @@ dependencies = [
 [[package]]
 name = "rustc_codegen_spirv-types"
 version = "0.9.0"
-source = "git+https://github.com/Rust-GPU/rust-gpu?rev=08917152504679eda474e952e79c711012920b36#08917152504679eda474e952e79c711012920b36"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=84e977ffe1060bb05311e47122c642b0a9f23d90#84e977ffe1060bb05311e47122c642b0a9f23d90"
 dependencies = [
  "rspirv",
  "serde",
@@ -999,7 +999,7 @@ dependencies = [
 [[package]]
 name = "spirv-builder"
 version = "0.9.0"
-source = "git+https://github.com/Rust-GPU/rust-gpu?rev=08917152504679eda474e952e79c711012920b36#08917152504679eda474e952e79c711012920b36"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=84e977ffe1060bb05311e47122c642b0a9f23d90#84e977ffe1060bb05311e47122c642b0a9f23d90"
 dependencies = [
  "cargo_metadata",
  "clap",
@@ -1007,7 +1007,7 @@ dependencies = [
  "memchr",
  "notify",
  "raw-string",
- "rustc_codegen_spirv-target-specs 0.9.0 (git+https://github.com/Rust-GPU/rust-gpu?rev=08917152504679eda474e952e79c711012920b36)",
+ "rustc_codegen_spirv-target-specs 0.9.0 (git+https://github.com/Rust-GPU/rust-gpu?rev=84e977ffe1060bb05311e47122c642b0a9f23d90)",
  "rustc_codegen_spirv-types",
  "semver",
  "serde",
