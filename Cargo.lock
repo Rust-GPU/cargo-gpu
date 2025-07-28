@@ -110,7 +110,7 @@ dependencies = [
  "env_logger",
  "log",
  "relative-path",
- "rustc_codegen_spirv-target-specs",
+ "rustc_codegen_spirv-target-specs 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "semver",
  "serde",
  "serde_json",
@@ -1054,9 +1054,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c89eaf493b3dfc730cda42a77014aad65e03213992c7afe0dff60a9f7d3dd94"
 
 [[package]]
+name = "rustc_codegen_spirv-target-specs"
+version = "0.9.0"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=86842247a1b72e5e014ff84bdf1dc25cfc14f34c#86842247a1b72e5e014ff84bdf1dc25cfc14f34c"
+dependencies = [
+ "serde",
+ "strum",
+ "thiserror",
+]
+
+[[package]]
 name = "rustc_codegen_spirv-types"
 version = "0.9.0"
-source = "git+https://github.com/Rust-GPU/rust-gpu?rev=3df836eb9d7b01344f52737bf9a310d1fb5a0c26#3df836eb9d7b01344f52737bf9a310d1fb5a0c26"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=86842247a1b72e5e014ff84bdf1dc25cfc14f34c#86842247a1b72e5e014ff84bdf1dc25cfc14f34c"
 dependencies = [
  "rspirv",
  "serde",
@@ -1236,7 +1246,7 @@ dependencies = [
 [[package]]
 name = "spirv-builder"
 version = "0.9.0"
-source = "git+https://github.com/Rust-GPU/rust-gpu?rev=3df836eb9d7b01344f52737bf9a310d1fb5a0c26#3df836eb9d7b01344f52737bf9a310d1fb5a0c26"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=86842247a1b72e5e014ff84bdf1dc25cfc14f34c#86842247a1b72e5e014ff84bdf1dc25cfc14f34c"
 dependencies = [
  "cargo_metadata",
  "clap",
@@ -1244,6 +1254,7 @@ dependencies = [
  "memchr",
  "notify",
  "raw-string",
+ "rustc_codegen_spirv-target-specs 0.9.0 (git+https://github.com/Rust-GPU/rust-gpu?rev=86842247a1b72e5e014ff84bdf1dc25cfc14f34c)",
  "rustc_codegen_spirv-types",
  "semver",
  "serde",
@@ -1262,6 +1273,27 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "strum"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "syn"
