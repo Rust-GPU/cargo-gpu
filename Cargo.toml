@@ -13,9 +13,9 @@ exclude = [
 resolver = "2"
 
 [workspace.dependencies]
-spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "3e89e6cc7b32b51db51d75b5f558ccd7ecf5b850", default-features = false }
+spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "3df836eb9d7b01344f52737bf9a310d1fb5a0c26", default-features = false }
 anyhow = "1.0.98"
-clap = { version = "4.5.37", features = ["derive"] }
+clap = { version = "4.5.41", features = ["derive"] }
 crossterm = "0.29.0"
 directories = "6.0.0"
 env_logger = "0.11.8"
