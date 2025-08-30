@@ -10,7 +10,7 @@ use spirv_builder::SpirvBuilder;
 use std::path::{Path, PathBuf};
 
 /// Represents a functional backend installation, whether it was cached or just installed.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct InstalledBackend {
     /// path to the `rustc_codegen_spirv` dylib
