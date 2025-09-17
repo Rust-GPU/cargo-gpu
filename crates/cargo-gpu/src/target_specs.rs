@@ -99,7 +99,7 @@ pub fn update_target_specs_files(
         } else {
             // copy over the target-specs
             log::info!(
-                "target-specs resolution: coping target-specs from `{}`{}",
+                "target-specs resolution: copying target-specs from `{}`{}",
                 target_specs_dst.display(),
                 if update_files { "" } else { " was skipped" }
             );
@@ -124,7 +124,7 @@ pub fn update_target_specs_files(
         );
         if update_files {
             log::info!(
-                "target-specs: Writing legacy target specs into `{}`",
+                "target-specs: writing legacy target specs into `{}`",
                 target_specs_dst.display()
             );
             write_legacy_target_specs(&target_specs_dst)?;
