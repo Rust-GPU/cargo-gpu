@@ -9,7 +9,7 @@ Command line tool for building Rust shaders using rust-gpu.
 To install the tool ensure you have `rustup`. Then run:
 
 ```
-cargo install --git https://github.com/rust-gpu/cargo-gpu cargo-gpu
+cargo install --git https://github.com/rust-gpu/cargo-gpu cargo-gpu-cli
 ```
 
 After that you can use `cargo gpu` to compile your shader crates with:
