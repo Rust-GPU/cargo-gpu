@@ -2,13 +2,21 @@
 #![allow(clippy::unwrap_used, reason = "this is basically a test")]
 //! `cargo gpu build`, analogous to `cargo build`
 
-use crate::install::Install;
-use crate::linkage::Linkage;
-use crate::lockfile::LockfileMismatchHandler;
-use anyhow::Context as _;
-use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
-use std::io::Write as _;
+use spirv_builder::SpirvBuilder;
 use std::path::PathBuf;
+
+#[cfg(feature = "watch")]
+use anyhow::Context as _;
+#[cfg(feature = "watch")]
+use spirv_builder::{CompileResult, ModuleResult};
+#[cfg(feature = "watch")]
+use std::io::Write as _;
+
+use crate::install::Install;
+use crate::lockfile::LockfileMismatchHandler;
+
+#[cfg(feature = "watch")]
+use crate::linkage::Linkage;
 
 /// Args for just a build
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -19,6 +27,7 @@ pub struct BuildArgs {
     pub output_dir: PathBuf,
 
     /// Watch the shader crate directory and automatically recompile on changes.
+    #[cfg(feature = "watch")]
     #[cfg_attr(feature = "clap", clap(long, short, action))]
     pub watch: bool,
 
@@ -37,6 +46,7 @@ impl Default for BuildArgs {
     fn default() -> Self {
         Self {
             output_dir: PathBuf::from("./"),
+            #[cfg(feature = "watch")]
             watch: false,
             spirv_builder: SpirvBuilder::default(),
             manifest_file: String::from("manifest.json"),
@@ -91,6 +101,7 @@ impl Build {
             std::env::current_dir()?.display()
         );
 
+        #[cfg(feature = "watch")]
         if self.build.watch {
             let this = self.clone();
             self.build
@@ -111,10 +122,12 @@ impl Build {
             let result = self.build.spirv_builder.build()?;
             self.parse_compilation_result(&result)?;
         }
+
         Ok(())
     }
 
     /// Parses compilation result from `SpirvBuilder` and writes it out to a file
+    #[cfg(feature = "watch")]
     fn parse_compilation_result(&self, result: &CompileResult) -> anyhow::Result<()> {
         let shaders = match &result.module {
             ModuleResult::MultiModule(modules) => {

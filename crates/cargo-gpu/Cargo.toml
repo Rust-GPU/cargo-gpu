@@ -11,7 +11,7 @@ license.workspace = true
 [dependencies]
 cargo_metadata.workspace = true
 anyhow.workspace = true
-spirv-builder = { workspace = true, features = ["watch"] }
+spirv-builder.workspace = true
 legacy_target_specs.workspace = true
 clap = { workspace = true, optional = true }
 directories.workspace = true
@@ -28,6 +28,7 @@ cargo_metadata = { workspace = true, features = ["builder"] }
 cargo-util-schemas.workspace = true
 
 [features]
+watch = ["spirv-builder/watch"]
 clap = ["dep:clap", "spirv-builder/clap"]
 
 [lints]
