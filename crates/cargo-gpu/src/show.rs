@@ -8,15 +8,18 @@ use std::fs;
 use std::path::Path;
 
 /// Show the computed source of the spirv-std dependency.
-#[derive(Clone, Debug, clap::Parser)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 pub struct SpirvSourceDep {
     /// The location of the shader-crate to inspect to determine its spirv-std dependency.
-    #[clap(long, default_value = "./")]
+    #[cfg_attr(feature = "clap", clap(long, default_value = "./"))]
     pub shader_crate: std::path::PathBuf,
 }
 
 /// Different tidbits of information that can be queried at the command line.
-#[derive(Clone, Debug, clap::Subcommand)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "clap", derive(clap::Subcommand))]
+#[cfg_attr(not(feature = "clap"), allow(dead_code))]
 pub enum Info {
     /// Displays the location of the cache directory
     CacheDirectory,
@@ -32,10 +35,10 @@ pub enum Info {
 }
 
 /// `cargo gpu show`
-#[derive(clap::Parser)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 pub struct Show {
     /// Display information about rust-gpu
-    #[clap(subcommand)]
+    #[cfg_attr(feature = "clap", clap(subcommand))]
     command: Info,
 }
 

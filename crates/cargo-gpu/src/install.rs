@@ -61,11 +61,15 @@ impl InstalledBackend {
     clippy::struct_excessive_bools,
     reason = "cmdline args have many bools"
 )]
-#[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 #[non_exhaustive]
 pub struct Install {
     /// Directory containing the shader crate to compile.
-    #[clap(long, alias("package"), short_alias('p'), default_value = "./")]
+    #[cfg_attr(
+        feature = "clap",
+        clap(long, alias("package"), short_alias('p'), default_value = "./")
+    )]
     #[serde(alias = "package")]
     pub shader_crate: PathBuf,
 
@@ -75,7 +79,7 @@ pub struct Install {
     )]
     /// Source of `spirv-builder` dependency
     /// Eg: "https://github.com/Rust-GPU/rust-gpu"
-    #[clap(long)]
+    #[cfg_attr(feature = "clap", clap(long))]
     pub spirv_builder_source: Option<String>,
 
     /// Version of `spirv-builder` dependency.
@@ -83,22 +87,22 @@ pub struct Install {
     ///   version such as "0.9.0".
     /// * If `--spirv-builder-source` is set, then this is assumed to be a Git "commitsh", such
     ///   as a Git commit hash or a Git tag, therefore anything that `git checkout` can resolve.
-    #[clap(long, verbatim_doc_comment)]
+    #[cfg_attr(feature = "clap", clap(long, verbatim_doc_comment))]
     pub spirv_builder_version: Option<String>,
 
     /// Force `rustc_codegen_spirv` to be rebuilt.
-    #[clap(long)]
+    #[cfg_attr(feature = "clap", clap(long))]
     pub rebuild_codegen: bool,
 
     /// Assume "yes" to "Install Rust toolchain: [y/n]" prompt.
     ///
     /// Defaults to `false` in cli, `true` in [`Default`]
-    #[clap(long, action)]
+    #[cfg_attr(feature = "clap", clap(long, action))]
     pub auto_install_rust_toolchain: bool,
 
     /// Clear target dir of `rustc_codegen_spirv` build after a successful build, saves about
     /// 200MiB of disk space.
-    #[clap(long = "no-clear-target", default_value = "true", action = clap::ArgAction::SetFalse)]
+    #[cfg_attr(feature = "clap", clap(long = "no-clear-target", default_value = "true", action = clap::ArgAction::SetFalse))]
     pub clear_target: bool,
 
     /// There is a tricky situation where a shader crate that depends on workspace config can have
@@ -122,7 +126,7 @@ pub struct Install {
     /// way source URLs are encoded. See these PRs for more details:
     ///   * <https://github.com/rust-lang/cargo/pull/12280>
     ///   * <https://github.com/rust-lang/cargo/pull/14595>
-    #[clap(long, action, verbatim_doc_comment)]
+    #[cfg_attr(feature = "clap", clap(long, action, verbatim_doc_comment))]
     pub force_overwrite_lockfiles_v4_to_v3: bool,
 }
 

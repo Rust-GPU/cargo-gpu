@@ -1,5 +1,7 @@
 //! Get config from the shader crate's `Cargo.toml` `[*.metadata.rust-gpu.*]`
 
+#![cfg(feature = "clap")]
+
 use cargo_metadata::MetadataCommand;
 use serde_json::Value;
 

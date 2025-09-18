@@ -11,23 +11,24 @@ use std::io::Write as _;
 use std::path::PathBuf;
 
 /// Args for just a build
-#[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 pub struct BuildArgs {
     /// Path to the output directory for the compiled shaders.
-    #[clap(long, short, default_value = "./")]
+    #[cfg_attr(feature = "clap", clap(long, short, default_value = "./"))]
     pub output_dir: PathBuf,
 
     /// Watch the shader crate directory and automatically recompile on changes.
-    #[clap(long, short, action)]
+    #[cfg_attr(feature = "clap", clap(long, short, action))]
     pub watch: bool,
 
     /// the flattened [`SpirvBuilder`]
-    #[clap(flatten)]
+    #[cfg_attr(feature = "clap", clap(flatten))]
     #[serde(flatten)]
     pub spirv_builder: SpirvBuilder,
 
     ///Renames the manifest.json file to the given name
-    #[clap(long, short, default_value = "manifest.json")]
+    #[cfg_attr(feature = "clap", clap(long, short, default_value = "manifest.json"))]
     pub manifest_file: String,
 }
 
@@ -44,14 +45,15 @@ impl Default for BuildArgs {
 }
 
 /// `cargo build` subcommands
-#[derive(Clone, clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 pub struct Build {
     /// CLI args for install the `rust-gpu` compiler and components
-    #[clap(flatten)]
+    #[cfg_attr(feature = "clap", clap(flatten))]
     pub install: Install,
 
     /// CLI args for configuring the build of the shader
-    #[clap(flatten)]
+    #[cfg_attr(feature = "clap", clap(flatten))]
     pub build: BuildArgs,
 }
 
@@ -175,6 +177,8 @@ impl Build {
 
 #[cfg(test)]
 mod test {
+    #![cfg(feature = "clap")]
+
     use clap::Parser as _;
 
     use crate::{Cli, Command};

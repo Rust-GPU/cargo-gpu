@@ -11,9 +11,9 @@ license.workspace = true
 [dependencies]
 cargo_metadata.workspace = true
 anyhow.workspace = true
-spirv-builder = { workspace = true, features = ["clap", "watch"] }
+spirv-builder = { workspace = true, features = ["watch"] }
 legacy_target_specs.workspace = true
-clap.workspace = true
+clap = { workspace = true, optional = true }
 directories.workspace = true
 log.workspace = true
 relative-path.workspace = true
@@ -27,6 +27,10 @@ dunce.workspace = true
 test-log.workspace = true
 cargo_metadata = { workspace = true, features = ["builder"] }
 cargo-util-schemas.workspace = true
+
+[features]
+# Enables `clap` support for public structs
+clap = ["dep:clap", "spirv-builder/clap"]
 
 [lints]
 workspace = true

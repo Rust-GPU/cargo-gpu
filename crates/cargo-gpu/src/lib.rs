@@ -52,9 +52,11 @@
 
 use anyhow::Context as _;
 
-use crate::dump_usage::dump_full_usage_for_readme;
 use build::Build;
 use show::Show;
+
+#[cfg(feature = "clap")]
+use crate::dump_usage::dump_full_usage_for_readme;
 
 mod build;
 mod config;
@@ -97,7 +99,7 @@ macro_rules! user_output {
 }
 
 /// All of the available subcommands for `cargo gpu`
-#[derive(clap::Subcommand)]
+#[cfg_attr(feature = "clap", derive(clap::Subcommand))]
 #[non_exhaustive]
 pub enum Command {
     /// Install rust-gpu compiler artifacts.
@@ -112,6 +114,7 @@ pub enum Command {
     /// A hidden command that can be used to recursively print out all the subcommand help messages:
     ///   `cargo gpu dump-usage`
     /// Useful for updating the README.
+    #[cfg(feature = "clap")]
     #[clap(hide(true))]
     DumpUsage,
 }
@@ -122,6 +125,7 @@ impl Command {
     /// # Errors
     /// Any errors during execution, usually printed to the user
     #[inline]
+    #[cfg(feature = "clap")]
     pub fn run(&self, env_args: Vec<String>) -> anyhow::Result<()> {
         match &self {
             Self::Install(install) => {
@@ -149,6 +153,7 @@ impl Command {
                 command.run()?;
             }
             Self::Show(show) => show.run()?,
+            #[cfg(feature = "clap")]
             Self::DumpUsage => dump_full_usage_for_readme()?,
         }
 
@@ -157,12 +162,15 @@ impl Command {
 }
 
 /// the Cli struct representing the main cli
-#[derive(clap::Parser)]
-#[clap(author, version, about, subcommand_required = true)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
+#[cfg_attr(
+    feature = "clap",
+    clap(author, version, about, subcommand_required = true)
+)]
 #[non_exhaustive]
 pub struct Cli {
     /// The command to run.
-    #[clap(subcommand)]
+    #[cfg_attr(feature = "clap", clap(subcommand))]
     pub command: Command,
 }
 
