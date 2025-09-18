@@ -140,15 +140,13 @@ impl Command {
                     config::Config::clap_command_with_cargo_config(shader_crate_path, env_args)?;
                 log::debug!("building with final merged arguments: {command:#?}");
 
+                //  When watching, do one normal run to setup the `manifest.json` file.
                 if command.build.watch {
-                    //  When watching, do one normal run to setup the `manifest.json` file.
                     command.build.watch = false;
                     command.run()?;
                     command.build.watch = true;
-                    command.run()?;
-                } else {
-                    command.run()?;
                 }
+                command.run()?;
             }
             Self::Show(show) => show.run()?,
             Self::DumpUsage => dump_full_usage_for_readme()?,

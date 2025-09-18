@@ -1,0 +1,24 @@
+[package]
+name = "cargo-gpu-cli"
+description = "Command line tool for building Rust shaders using `rust-gpu`"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+default-run = "cargo-gpu"
+
+[[bin]]
+name = "cargo-gpu"
+path = "src/main.rs"
+
+[dependencies]
+cargo-gpu = { path = "../cargo-gpu" }
+clap.workspace = true
+log.workspace = true
+env_logger.workspace = true
+anyhow.workspace = true
+
+[lints]
+workspace = true

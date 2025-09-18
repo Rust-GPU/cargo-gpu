@@ -107,7 +107,6 @@ dependencies = [
  "clap",
  "crossterm",
  "directories",
- "env_logger",
  "log",
  "relative-path",
  "rustc_codegen_spirv-target-specs",
@@ -116,6 +115,17 @@ dependencies = [
  "serde_json",
  "spirv-builder",
  "test-log",
+]
+
+[[package]]
+name = "cargo-gpu-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cargo-gpu",
+ "clap",
+ "env_logger",
+ "log",
 ]
 
 [[package]]
