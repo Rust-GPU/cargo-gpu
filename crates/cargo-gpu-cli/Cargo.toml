@@ -14,7 +14,7 @@ name = "cargo-gpu"
 path = "src/main.rs"
 
 [dependencies]
-cargo-gpu = { path = "../cargo-gpu" }
+cargo-gpu = { path = "../cargo-gpu", features = ["clap"] }
 clap.workspace = true
 log.workspace = true
 env_logger.workspace = true

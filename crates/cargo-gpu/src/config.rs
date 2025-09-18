@@ -1,4 +1,7 @@
 //! Manage and merge the various sources of config: shader crate's `Cargo.toml`(s) and CLI args.
+
+#![cfg(feature = "clap")]
+
 use anyhow::Context as _;
 use clap::Parser as _;
 
