@@ -1,0 +1,7 @@
+[
+  {
+    "source_path": "../../output/duplicate_main.1.spv",
+    "entry_point": "duplicate_main",
+    "wgsl_entry_point": "duplicate_main"
+  }
+]
