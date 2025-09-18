@@ -29,6 +29,7 @@ test-log = "0.2.18"
 cargo_metadata = "0.21.0"
 cargo-util-schemas = "0.8.2"
 semver = "1.0.26"
+dunce = "1.0.5"
 
 # This crate MUST NEVER be upgraded, we need this particular "first" version to support old rust-gpu builds
 legacy_target_specs = { package = "rustc_codegen_spirv-target-specs", version = "0.9.0", features = ["include_str"] }
