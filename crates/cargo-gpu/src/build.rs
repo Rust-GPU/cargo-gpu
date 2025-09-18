@@ -76,12 +76,12 @@ impl Build {
             self.build.output_dir.display()
         );
         std::fs::create_dir_all(&self.build.output_dir)?;
-        let canonicalized = self.build.output_dir.canonicalize()?;
+        let canonicalized = dunce::canonicalize(&self.build.output_dir)?;
         log::debug!("canonicalized output dir: {}", canonicalized.display());
         self.build.output_dir = canonicalized;
 
         // Ensure the shader crate exists
-        self.install.shader_crate = self.install.shader_crate.canonicalize()?;
+        self.install.shader_crate = dunce::canonicalize(&self.install.shader_crate)?;
         anyhow::ensure!(
             self.install.shader_crate.exists(),
             "shader crate '{}' does not exist. (Current dir is '{}')",
