@@ -1,6 +1,7 @@
 [workspace]
 members = [
 	"crates/cargo-gpu",
+	"crates/test-shaders",
 	"crates/xtask",
 ]
 
