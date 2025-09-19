@@ -2,21 +2,14 @@
 #![allow(clippy::unwrap_used, reason = "this is basically a test")]
 //! `cargo gpu build`, analogous to `cargo build`
 
-use spirv_builder::SpirvBuilder;
+use anyhow::Context as _;
+use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
+use std::io::Write as _;
 use std::path::PathBuf;
 
-#[cfg(feature = "watch")]
-use anyhow::Context as _;
-#[cfg(feature = "watch")]
-use spirv_builder::{CompileResult, ModuleResult};
-#[cfg(feature = "watch")]
-use std::io::Write as _;
-
 use crate::install::Install;
-use crate::lockfile::LockfileMismatchHandler;
-
-#[cfg(feature = "watch")]
 use crate::linkage::Linkage;
+use crate::lockfile::LockfileMismatchHandler;
 
 /// Args for just a build
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -102,32 +95,51 @@ impl Build {
         );
 
         #[cfg(feature = "watch")]
-        if self.build.watch {
+        let watching = self.build.watch;
+        #[cfg(not(feature = "watch"))]
+        let watching = false;
+        if watching {
+            return self.watch();
+        }
+
+        self.build()
+    }
+
+    /// Builds shader crate using [`SpirvBuilder`].
+    fn build(&self) -> anyhow::Result<()> {
+        crate::user_output!(
+            "Compiling shaders at {}...\n",
+            self.install.shader_crate.display()
+        );
+        let result = self.build.spirv_builder.build()?;
+        self.parse_compilation_result(&result)?;
+        Ok(())
+    }
+
+    /// Watches shader crate for changes using [`SpirvBuilder`]
+    /// or returns an error depending on presence of `watch` feature.
+    fn watch(&self) -> anyhow::Result<()> {
+        #[cfg(feature = "watch")]
+        {
             let this = self.clone();
             self.build
                 .spirv_builder
                 .watch(move |result, accept| {
-                    let result1 = this.parse_compilation_result(&result);
+                    let parse_result = this.parse_compilation_result(&result);
                     if let Some(accept) = accept {
-                        accept.submit(result1);
+                        accept.submit(parse_result);
                     }
                 })?
-                .context("unreachable")??;
-            std::thread::park();
-        } else {
-            crate::user_output!(
-                "Compiling shaders at {}...\n",
-                self.install.shader_crate.display()
-            );
-            let result = self.build.spirv_builder.build()?;
-            self.parse_compilation_result(&result)?;
+                .context("should always return the first compile result")
+                .flatten()?;
+            anyhow::bail!("unexpected end of watch")
         }
 
-        Ok(())
+        #[cfg(not(feature = "watch"))]
+        anyhow::bail!("cannot watch for changes without the `watch` feature")
     }
 
-    /// Parses compilation result from `SpirvBuilder` and writes it out to a file
-    #[cfg(feature = "watch")]
+    /// Parses compilation result from [`SpirvBuilder`] and writes it out to a file
     fn parse_compilation_result(&self, result: &CompileResult) -> anyhow::Result<()> {
         let shaders = match &result.module {
             ModuleResult::MultiModule(modules) => {

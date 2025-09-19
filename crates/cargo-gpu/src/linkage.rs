@@ -1,7 +1,5 @@
 //! Mainly for the Linkage struct, which is written to a json file.
 
-#![cfg(feature = "watch")]
-
 /// Shader source and entry point that can be used to create shader linkage.
 #[derive(serde::Serialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Linkage {
