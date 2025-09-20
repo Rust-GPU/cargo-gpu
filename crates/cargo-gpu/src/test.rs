@@ -4,6 +4,7 @@
 use crate::cache_dir;
 use std::io::Write as _;
 
+#[cfg_attr(not(feature = "clap"), allow(dead_code))]
 fn copy_dir_all(
     src: impl AsRef<std::path::Path>,
     dst: impl AsRef<std::path::Path>,
@@ -26,12 +27,14 @@ pub fn shader_crate_template_path() -> std::path::PathBuf {
     project_base.join("../shader-crate-template")
 }
 
+#[cfg_attr(not(feature = "clap"), allow(dead_code))]
 pub fn shader_crate_test_path() -> std::path::PathBuf {
     let shader_crate_path = crate::cache_dir().unwrap().join("shader_crate");
     copy_dir_all(shader_crate_template_path(), shader_crate_path.clone()).unwrap();
     shader_crate_path
 }
 
+#[cfg_attr(not(feature = "clap"), allow(dead_code))]
 pub fn overwrite_shader_cargo_toml(shader_crate_path: &std::path::Path) -> std::fs::File {
     let cargo_toml = shader_crate_path.join("Cargo.toml");
     let mut file = std::fs::OpenOptions::new()
@@ -44,6 +47,7 @@ pub fn overwrite_shader_cargo_toml(shader_crate_path: &std::path::Path) -> std::
     file
 }
 
+#[cfg_attr(not(feature = "clap"), allow(dead_code))]
 pub fn tests_teardown() {
     let cache_dir = cache_dir().unwrap();
     if !cache_dir.exists() {
