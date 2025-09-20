@@ -264,14 +264,14 @@ package = "rustc_codegen_spirv"
         let target_spec_dir = update_target_specs_files(&source, &dummy_metadata, !skip_rebuild)
             .context("writing target spec files")?;
 
-        if !skip_rebuild {
-            log::debug!("ensure_toolchain_and_components_exist");
-            crate::install_toolchain::ensure_toolchain_and_components_exist(
-                &toolchain_channel,
-                self.auto_install_rust_toolchain,
-            )
-            .context("ensuring toolchain and components exist")?;
+        log::debug!("ensure_toolchain_and_components_exist");
+        crate::install_toolchain::ensure_toolchain_and_components_exist(
+            &toolchain_channel,
+            self.auto_install_rust_toolchain,
+        )
+        .context("ensuring toolchain and components exist")?;
 
+        if !skip_rebuild {
             // to prevent unsupported version errors when using older toolchains
             if !source.is_path() {
                 log::debug!("remove Cargo.lock");

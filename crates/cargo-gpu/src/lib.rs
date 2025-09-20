@@ -145,10 +145,8 @@ impl Command {
                     command.build.watch = false;
                     command.run()?;
                     command.build.watch = true;
-                    command.run()?;
-                } else {
-                    command.run()?;
                 }
+                command.run()?;
             }
             Self::Show(show) => show.run()?,
             Self::DumpUsage => dump_full_usage_for_readme()?,
