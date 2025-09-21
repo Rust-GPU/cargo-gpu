@@ -152,7 +152,7 @@ fn main() {
             cmd(["cargo", "install", "--path", "crates/cargo-gpu"]).unwrap();
 
             log::info!("setup project");
-            let dir = tempdir::TempDir::new("test-shader-output").unwrap();
+            let dir = tempfile::TempDir::with_prefix("test-shader-output").unwrap();
             let mut overwriter = ShaderCrateTemplateCargoTomlWriter::new();
             overwriter.replace_output_dir(dir.path()).unwrap();
 
