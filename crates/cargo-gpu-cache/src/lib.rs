@@ -2,12 +2,12 @@
 
 //! Rust GPU shader crate builder.
 //!
-//! This program and library allows you to easily compile your rust-gpu shaders,
+//! This library allows you to easily compile your rust-gpu shaders,
 //! without requiring you to fix your entire project to a specific toolchain.
 //!
 //! # How it works
 //!
-//! This program primarily manages installations of `rustc_codegen_spirv`, the
+//! This library primarily manages installations of `rustc_codegen_spirv`, the
 //! codegen backend of rust-gpu to generate SPIR-V shader binaries. The codegen
 //! backend builds on internal, ever-changing interfaces of rustc, which requires
 //! fixing a version of rust-gpu to a specific version of the rustc compiler.
@@ -17,12 +17,12 @@
 //!
 //! We continue to use rust-gpu's `spirv_builder` crate to pass the many additional
 //! parameters required to configure rustc and our codegen backend, but provide you
-//! with a toolchain agnostic version that you may use from stable rustc. And a
-//! `cargo gpu` cmdline utility to simplify shader building even more.
+//! with a toolchain agnostic version that you may use from stable rustc.
+//! And a `cargo gpu` command line utility to simplify shader building even more.
 //!
 //! ## Where the binaries are
 //!
-//! We store our prebuild `rustc_spirv_builder` binaries in the default cache
+//! We store our prebuilt `rustc_spirv_builder` binaries in the default cache
 //! directory of your OS:
 //! * Windows: `C:/users/<user>/AppData/Local/rust-gpu`
 //! * Mac: `~/Library/Caches/rust-gpu`

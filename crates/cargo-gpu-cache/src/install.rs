@@ -74,8 +74,9 @@ pub struct Install {
     pub shader_crate: PathBuf,
 
     #[expect(
+        rustdoc::bare_urls,
         clippy::doc_markdown,
-        reason = "The URL should appear literally like this. But Clippy wants a markdown clickable link"
+        reason = "The URL should appear literally like this. But Clippy & rustdoc want a markdown clickable link"
     )]
     /// Source of `spirv-builder` dependency
     /// Eg: "https://github.com/Rust-GPU/rust-gpu"

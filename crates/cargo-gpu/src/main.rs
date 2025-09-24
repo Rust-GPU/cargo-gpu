@@ -1,4 +1,10 @@
-//! main executable of cargo gpu
+//! Command line tool for building Rust shaders using `rust-gpu`.
+//!
+//! This program allows you to easily compile your rust-gpu shaders,
+//! without requiring you to fix your entire project to a specific toolchain.
+//!
+//! For additional information see the [`cargo-gpu-cache`](cargo_gpu_cache) crate documentation.
+
 use cargo_gpu_cache::Cli;
 use clap::Parser as _;
 

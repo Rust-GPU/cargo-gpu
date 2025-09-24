@@ -1,6 +1,6 @@
 [package]
 name = "cargo-gpu-cache"
-description = "Generates shader .spv files from `rust-gpu` shader crates"
+description = "Builder of `rust-gpu` shader crates"
 readme = "../../README.md"
 version.workspace = true
 edition.workspace = true
