@@ -1,0 +1,38 @@
+[package]
+name = "cargo-gpu-cache"
+description = "Generates shader .spv files from `rust-gpu` shader crates"
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[dependencies]
+cargo_metadata.workspace = true
+anyhow.workspace = true
+spirv-builder.workspace = true
+legacy_target_specs.workspace = true
+clap = { workspace = true, optional = true }
+directories.workspace = true
+log.workspace = true
+relative-path.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+crossterm.workspace = true
+semver.workspace = true
+dunce.workspace = true
+
+[dev-dependencies]
+test-log.workspace = true
+cargo_metadata = { workspace = true, features = ["builder"] }
+cargo-util-schemas.workspace = true
+
+[features]
+# Rebuilds target shader crate upon changes
+watch = ["spirv-builder/watch"]
+# Enables `clap` support for public structs
+clap = ["dep:clap", "spirv-builder/clap"]
+
+[lints]
+workspace = true

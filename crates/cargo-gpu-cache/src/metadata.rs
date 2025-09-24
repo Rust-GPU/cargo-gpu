@@ -179,7 +179,7 @@ mod test {
         let cargo_gpu = metadata
             .packages
             .iter_mut()
-            .find(|package| package.name.contains("cargo-gpu"))
+            .find(|package| package.name.contains("cargo-gpu-cache")) // should be the name of this very crate
             .unwrap();
         cargo_gpu.metadata = serde_json::json!({
             "rust-gpu": {

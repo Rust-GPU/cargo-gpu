@@ -1,5 +1,5 @@
 //! main executable of cargo gpu
-use cargo_gpu::Cli;
+use cargo_gpu_cache::Cli;
 use clap::Parser as _;
 
 fn main() {
