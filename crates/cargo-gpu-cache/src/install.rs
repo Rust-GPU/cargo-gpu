@@ -1,13 +1,16 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
 
+use std::path::{Path, PathBuf};
+
+use anyhow::Context as _;
+use rustc_codegen_spirv_cache::cache_dir;
+use spirv_builder::SpirvBuilder;
+
+use crate::spirv_source::SpirvSource;
 use crate::spirv_source::{
     get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
 };
 use crate::target_specs::update_target_specs_files;
-use crate::{cache_dir, spirv_source::SpirvSource};
-use anyhow::Context as _;
-use spirv_builder::SpirvBuilder;
-use std::path::{Path, PathBuf};
 
 /// Represents a functional backend installation, whether it was cached or just installed.
 #[derive(Clone, Debug, Default)]
@@ -284,7 +287,7 @@ package = "rustc_codegen_spirv"
                     .context("remove Cargo.lock")?;
             }
 
-            crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source);
+            crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source)?;
             let mut cargo = spirv_builder::cargo_cmd::CargoCmd::new();
             cargo
                 .current_dir(&install_dir)

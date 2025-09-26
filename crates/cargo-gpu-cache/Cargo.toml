@@ -8,12 +8,12 @@ keywords.workspace = true
 license.workspace = true
 
 [dependencies]
+rustc_codegen_spirv-cache = { path = "../rustc_codegen_spirv-cache", default-features = false }
 cargo_metadata.workspace = true
 anyhow.workspace = true
 spirv-builder.workspace = true
 legacy_target_specs.workspace = true
 clap = { workspace = true, optional = true }
-directories.workspace = true
 log.workspace = true
 relative-path.workspace = true
 serde.workspace = true
@@ -24,6 +24,7 @@ dunce.workspace = true
 
 [dev-dependencies]
 test-log.workspace = true
+tempfile.workspace = true
 cargo_metadata = { workspace = true, features = ["builder"] }
 cargo-util-schemas.workspace = true
 

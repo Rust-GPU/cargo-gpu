@@ -238,9 +238,9 @@ impl LockfileMismatchHandler {
         Ok(())
     }
 
-    /// Exit and give the user advice on how to deal with the infamous v3/v4 Cargo lockfile version
-    /// problem.
-    #[expect(clippy::non_ascii_literal, reason = "It's CLI output")]
+    /// Exit and give the user advice on how to deal with the infamous
+    /// v3/v4 Cargo lockfile version problem.
+    #[expect(clippy::unwrap_used, reason = "It's CLI output")]
     fn exit_with_v3v4_hack_suggestion() {
         crate::user_output!(
             "Conflicting `Cargo.lock` versions detected ⚠️\n\
@@ -259,7 +259,8 @@ impl LockfileMismatchHandler {
             \n\
             See `cargo gpu build --help` for more information.\n\
             "
-        );
+        )
+        .unwrap();
         std::process::exit(1);
     }
 }

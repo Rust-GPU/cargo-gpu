@@ -14,7 +14,9 @@ pub fn dump_full_usage_for_readme() -> anyhow::Result<()> {
     command.build();
 
     write_help(&mut buffer, &mut command, 0)?;
-    user_output!("{}", String::from_utf8(buffer)?);
+
+    let message = String::from_utf8(buffer)?;
+    user_output!("{message}")?;
 
     Ok(())
 }

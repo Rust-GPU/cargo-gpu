@@ -7,26 +7,13 @@
 //!
 //! # How it works
 //!
-//! This library primarily manages installations of `rustc_codegen_spirv`, the
-//! codegen backend of rust-gpu to generate SPIR-V shader binaries. The codegen
-//! backend builds on internal, ever-changing interfaces of rustc, which requires
-//! fixing a version of rust-gpu to a specific version of the rustc compiler.
-//! Usually, this would require you to fix your entire project to that specific
-//! toolchain, but this project loosens that requirement by managing installations
-//! of `rustc_codegen_spirv` and their associated toolchains for you.
+//! This library manages installations of `rustc_codegen_spirv`
+//! using rust-gpu's [`rustc_codegen_spirv-cache`](rustc_codegen_spirv_cache) crate.
 //!
-//! We continue to use rust-gpu's `spirv_builder` crate to pass the many additional
-//! parameters required to configure rustc and our codegen backend, but provide you
-//! with a toolchain agnostic version that you may use from stable rustc.
+//! Then we continue to use rust-gpu's [`spirv-builder`](spirv_builder) crate
+//! to pass the many additional parameters required to configure rustc and our codegen backend,
+//! but provide you with a toolchain agnostic version that you may use from stable rustc.
 //! And a `cargo gpu` command line utility to simplify shader building even more.
-//!
-//! ## Where the binaries are
-//!
-//! We store our prebuilt `rustc_spirv_builder` binaries in the default cache
-//! directory of your OS:
-//! * Windows: `C:/users/<user>/AppData/Local/rust-gpu`
-//! * Mac: `~/Library/Caches/rust-gpu`
-//! * Linux: `~/.cache/rust-gpu`
 //!
 //! ## How we build the backend
 //!
@@ -50,8 +37,6 @@
 //! conduct other post-processing, like converting the `spv` files into `wgsl` files,
 //! for example.
 
-use anyhow::Context as _;
-
 use build::Build;
 use show::Show;
 
@@ -74,28 +59,30 @@ mod test;
 pub use install::*;
 pub use spirv_builder;
 
-/// Central function to write to the user.
+/// Writes formatted user output into a [writer](std::io::Write).
 #[macro_export]
-macro_rules! user_output {
-    ($($args: tt)*) => {
+macro_rules! write_user_output {
+    ($dst:expr, $($args:tt)*) => {{
         #[allow(
             clippy::allow_attributes,
             clippy::useless_attribute,
             unused_imports,
             reason = "`std::io::Write` is only sometimes called??"
         )]
-        use std::io::Write as _;
+        use ::std::io::Write as _;
 
-        #[expect(
-            clippy::non_ascii_literal,
-            reason = "CRAB GOOD. CRAB IMPORTANT."
-        )]
-        {
-            print!("🦀 ");
-        }
-        print!($($args)*);
-        std::io::stdout().flush().unwrap();
-   }
+        let mut writer = $dst;
+        #[expect(clippy::non_ascii_literal, reason = "CRAB GOOD. CRAB IMPORTANT.")]
+        ::std::write!(writer, "🦀 ")
+            .and_then(|()| ::std::write!(writer, $($args)*))
+            .and_then(|()| ::std::io::Write::flush(&mut writer))
+    }};
+}
+
+/// Central function to write to the user.
+#[macro_export]
+macro_rules! user_output {
+    ($($args: tt)*) => { $crate::write_user_output!(::std::io::stdout(), $($args)*) };
 }
 
 /// All of the available subcommands for `cargo gpu`
@@ -174,26 +161,6 @@ pub struct Cli {
     /// The command to run.
     #[cfg_attr(feature = "clap", clap(subcommand))]
     pub command: Command,
-}
-
-/// The central cache directory of cargo gpu
-///
-/// # Errors
-/// may fail if we can't find the user home directory
-#[inline]
-pub fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
-    let dir = directories::BaseDirs::new()
-        .with_context(|| "could not find the user home directory")?
-        .cache_dir()
-        .join("rust-gpu");
-
-    Ok(if cfg!(test) {
-        let thread_id = std::thread::current().id();
-        let id = format!("{thread_id:?}").replace('(', "-").replace(')', "");
-        dir.join("tests").join(id)
-    } else {
-        dir
-    })
 }
 
 /// Returns a string suitable to use as a directory.

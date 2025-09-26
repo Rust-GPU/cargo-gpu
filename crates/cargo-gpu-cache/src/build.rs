@@ -110,7 +110,7 @@ impl Build {
         crate::user_output!(
             "Compiling shaders at {}...\n",
             self.install.shader_crate.display()
-        );
+        )?;
         let result = self.build.spirv_builder.build()?;
         self.parse_compilation_result(&result)?;
         Ok(())

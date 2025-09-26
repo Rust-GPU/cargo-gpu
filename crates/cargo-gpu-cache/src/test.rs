@@ -1,7 +1,7 @@
 //! utilities for tests
+
 #![cfg(test)]
 
-use crate::cache_dir;
 use std::io::Write as _;
 
 #[cfg_attr(not(feature = "clap"), allow(dead_code))]
@@ -28,10 +28,17 @@ pub fn shader_crate_template_path() -> std::path::PathBuf {
 }
 
 #[cfg_attr(not(feature = "clap"), allow(dead_code))]
+thread_local! {
+    static TEMPDIR: tempfile::TempDir = tempfile::TempDir::with_prefix("shader_crate").unwrap();
+}
+
+#[cfg_attr(not(feature = "clap"), allow(dead_code))]
 pub fn shader_crate_test_path() -> std::path::PathBuf {
-    let shader_crate_path = crate::cache_dir().unwrap().join("shader_crate");
-    copy_dir_all(shader_crate_template_path(), shader_crate_path.clone()).unwrap();
-    shader_crate_path
+    TEMPDIR.with(|tempdir| {
+        let shader_crate_path = tempdir.path();
+        copy_dir_all(shader_crate_template_path(), shader_crate_path).unwrap();
+        shader_crate_path.to_path_buf()
+    })
 }
 
 #[cfg_attr(not(feature = "clap"), allow(dead_code))]
@@ -49,9 +56,9 @@ pub fn overwrite_shader_cargo_toml(shader_crate_path: &std::path::Path) -> std::
 
 #[cfg_attr(not(feature = "clap"), allow(dead_code))]
 pub fn tests_teardown() {
-    let cache_dir = cache_dir().unwrap();
-    if !cache_dir.exists() {
+    let dir = shader_crate_test_path();
+    if !dir.exists() {
         return;
     }
-    std::fs::remove_dir_all(cache_dir).unwrap();
+    std::fs::remove_dir_all(dir).unwrap();
 }

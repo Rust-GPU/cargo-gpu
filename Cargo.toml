@@ -1,5 +1,6 @@
 [workspace]
 members = [
+	"crates/rustc_codegen_spirv-cache",
 	"crates/cargo-gpu-cache",
 	"crates/cargo-gpu",
 	"crates/xtask",
