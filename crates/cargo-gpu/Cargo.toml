@@ -1,6 +1,7 @@
 [package]
 name = "cargo-gpu"
 description = "Command line tool for building Rust shaders using `rust-gpu`"
+readme = "../../README.md"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true

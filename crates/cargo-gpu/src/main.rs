@@ -5,10 +5,12 @@
 //!
 //! For additional information see the [`cargo-gpu-cache`](cargo_gpu_cache) crate documentation.
 
+use std::process::ExitCode;
+
 use cargo_gpu_cache::Cli;
 use clap::Parser as _;
 
-fn main() {
+fn main() -> ExitCode {
     #[cfg(debug_assertions)]
     std::env::set_var("RUST_BACKTRACE", "1");
 
@@ -23,13 +25,10 @@ fn main() {
         )]
         {
             eprintln!("Error: {error}");
-
-            // `clippy::exit` seems to be a false positive in `main()`.
-            // See: https://github.com/rust-lang/rust-clippy/issues/13518
-            #[expect(clippy::restriction, reason = "Our central place for safely exiting")]
-            std::process::exit(1);
+            return ExitCode::FAILURE;
         };
     }
+    ExitCode::SUCCESS
 }
 
 /// Wrappable "main" to catch errors.
@@ -42,6 +41,7 @@ fn run() -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>();
     log::trace!("CLI args: {env_args:#?}");
+
     let cli = Cli::parse_from(&env_args);
     cli.command.run(env_args)
 }

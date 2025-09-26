@@ -251,7 +251,7 @@ impl LockfileMismatchHandler {
             \n\
             One way to resolve this is to force the workspace to use the same version\n\
             of Rust as required by the shader. However that is not often ideal or even\n\
-            possible. Another way is to exlude the shader from the workspace. This is\n\
+            possible. Another way is to exclude the shader from the workspace. This is\n\
             also not ideal if you have many shaders sharing config from the workspace.\n\
             \n\
             Therefore `cargo gpu build/install` offers a workaround with the argument:\n\

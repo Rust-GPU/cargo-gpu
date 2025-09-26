@@ -1,7 +1,6 @@
 [package]
 name = "cargo-gpu-cache"
 description = "Builder of `rust-gpu` shader crates"
-readme = "../../README.md"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
