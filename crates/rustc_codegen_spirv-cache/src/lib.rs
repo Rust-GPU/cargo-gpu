@@ -13,13 +13,13 @@
 //!
 //! ## Where the binaries are
 //!
-//! Prebuilt binaries are stored in the default [cache directory](crate::cache_dir()) of your OS:
-//! * Windows: `C:/users/<user>/AppData/Local/rust-gpu`
-//! * Mac: `~/Library/Caches/rust-gpu`
-//! * Linux: `~/.cache/rust-gpu`
+//! Prebuilt binaries are stored in the [cache directory](crate::cache::cache_dir()),
+//! which path differs by OS.
 
-#![expect(clippy::pub_use, reason = "re-export for convenience")]
+#![expect(clippy::pub_use, reason = "reexport for convenience")]
 
-pub use self::cache_dir::{cache_dir, CacheDirError};
+pub use cargo_metadata;
 
-mod cache_dir;
+pub mod cache;
+pub mod metadata;
+pub mod spirv_source;

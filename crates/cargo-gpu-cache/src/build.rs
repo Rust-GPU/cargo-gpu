@@ -204,15 +204,16 @@ impl Build {
 mod test {
     #![cfg(feature = "clap")]
 
+    use cargo_gpu_test_utils::{shader_crate_template_path, tests_teardown};
     use clap::Parser as _;
 
     use crate::{Cli, Command};
 
     #[test_log::test]
     fn builder_from_params() {
-        crate::test::tests_teardown();
+        tests_teardown();
 
-        let shader_crate_path = crate::test::shader_crate_template_path();
+        let shader_crate_path = shader_crate_template_path();
         let output_dir = shader_crate_path.join("shaders");
 
         let args = [

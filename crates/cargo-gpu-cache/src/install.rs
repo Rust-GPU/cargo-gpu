@@ -3,13 +3,13 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use rustc_codegen_spirv_cache::cache_dir;
+use rustc_codegen_spirv_cache::{
+    cache::cache_dir,
+    metadata::{query_metadata, MetadataExt as _},
+    spirv_source::{get_channel_from_rustc_codegen_spirv_build_script, SpirvSource},
+};
 use spirv_builder::SpirvBuilder;
 
-use crate::spirv_source::SpirvSource;
-use crate::spirv_source::{
-    get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
-};
 use crate::target_specs::update_target_specs_files;
 
 /// Represents a functional backend installation, whether it was cached or just installed.

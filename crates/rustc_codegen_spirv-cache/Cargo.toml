@@ -8,7 +8,16 @@ keywords.workspace = true
 license.workspace = true
 
 [dependencies]
+thiserror.workspace = true
 directories.workspace = true
+cargo_metadata.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+cargo-gpu-test-utils = { path = "../cargo-gpu-test-utils" }
+test-log.workspace = true
+cargo_metadata = { workspace = true, features = ["builder"] }
+cargo-util-schemas.workspace = true
 
 [lints]
 workspace = true

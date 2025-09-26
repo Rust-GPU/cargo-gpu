@@ -23,8 +23,8 @@ semver.workspace = true
 dunce.workspace = true
 
 [dev-dependencies]
+cargo-gpu-test-utils = { path = "../cargo-gpu-test-utils" }
 test-log.workspace = true
-tempfile.workspace = true
 cargo_metadata = { workspace = true, features = ["builder"] }
 cargo-util-schemas.workspace = true
 

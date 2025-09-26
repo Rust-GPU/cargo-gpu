@@ -87,13 +87,15 @@ impl Config {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     use std::io::Write as _;
+
+    use cargo_gpu_test_utils::{overwrite_shader_cargo_toml, shader_crate_test_path};
+
+    use super::*;
 
     #[test_log::test]
     fn booleans_from_cli() {
-        let shader_crate_path = crate::test::shader_crate_test_path();
+        let shader_crate_path = shader_crate_test_path();
 
         let args = Config::clap_command_with_cargo_config(
             &shader_crate_path,
@@ -111,8 +113,8 @@ mod test {
 
     #[test_log::test]
     fn booleans_from_cargo() {
-        let shader_crate_path = crate::test::shader_crate_test_path();
-        let mut file = crate::test::overwrite_shader_cargo_toml(&shader_crate_path);
+        let shader_crate_path = shader_crate_test_path();
+        let mut file = overwrite_shader_cargo_toml(&shader_crate_path);
         file.write_all(
             [
                 "[package.metadata.rust-gpu.build]",
@@ -131,8 +133,8 @@ mod test {
     }
 
     fn update_cargo_output_dir() -> std::path::PathBuf {
-        let shader_crate_path = crate::test::shader_crate_test_path();
-        let mut file = crate::test::overwrite_shader_cargo_toml(&shader_crate_path);
+        let shader_crate_path = shader_crate_test_path();
+        let mut file = overwrite_shader_cargo_toml(&shader_crate_path);
         file.write_all(
             [
                 "[package.metadata.rust-gpu.build]",
@@ -176,8 +178,8 @@ mod test {
 
     #[test_log::test]
     fn arrays_from_cargo() {
-        let shader_crate_path = crate::test::shader_crate_test_path();
-        let mut file = crate::test::overwrite_shader_cargo_toml(&shader_crate_path);
+        let shader_crate_path = shader_crate_test_path();
+        let mut file = overwrite_shader_cargo_toml(&shader_crate_path);
         file.write_all(
             [
                 "[package.metadata.rust-gpu.build]",
@@ -200,7 +202,7 @@ mod test {
 
     #[test_log::test]
     fn rename_manifest_parse() {
-        let shader_crate_path = crate::test::shader_crate_test_path();
+        let shader_crate_path = shader_crate_test_path();
 
         let args = Config::clap_command_with_cargo_config(
             &shader_crate_path,
