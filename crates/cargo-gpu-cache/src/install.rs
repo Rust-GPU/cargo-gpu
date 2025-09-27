@@ -1,13 +1,15 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
 
-use crate::spirv_source::{
-    get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
-};
-use crate::target_specs::update_target_specs_files;
-use crate::{cache_dir, spirv_source::SpirvSource};
-use anyhow::Context as _;
-use spirv_builder::SpirvBuilder;
 use std::path::{Path, PathBuf};
+
+use anyhow::Context as _;
+use rustc_codegen_spirv_cache::{
+    cache::cache_dir,
+    metadata::{query_metadata, MetadataExt as _},
+    spirv_source::{rust_gpu_toolchain_channel, SpirvSource},
+    target_specs::update_target_specs_files,
+};
+use spirv_builder::SpirvBuilder;
 
 /// Represents a functional backend installation, whether it was cached or just installed.
 #[derive(Clone, Debug, Default)]
@@ -61,21 +63,26 @@ impl InstalledBackend {
     clippy::struct_excessive_bools,
     reason = "cmdline args have many bools"
 )]
-#[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 #[non_exhaustive]
 pub struct Install {
     /// Directory containing the shader crate to compile.
-    #[clap(long, alias("package"), short_alias('p'), default_value = "./")]
+    #[cfg_attr(
+        feature = "clap",
+        clap(long, alias("package"), short_alias('p'), default_value = "./")
+    )]
     #[serde(alias = "package")]
     pub shader_crate: PathBuf,
 
     #[expect(
+        rustdoc::bare_urls,
         clippy::doc_markdown,
-        reason = "The URL should appear literally like this. But Clippy wants a markdown clickable link"
+        reason = "The URL should appear literally like this. But Clippy & rustdoc want a markdown clickable link"
     )]
     /// Source of `spirv-builder` dependency
     /// Eg: "https://github.com/Rust-GPU/rust-gpu"
-    #[clap(long)]
+    #[cfg_attr(feature = "clap", clap(long))]
     pub spirv_builder_source: Option<String>,
 
     /// Version of `spirv-builder` dependency.
@@ -83,22 +90,22 @@ pub struct Install {
     ///   version such as "0.9.0".
     /// * If `--spirv-builder-source` is set, then this is assumed to be a Git "commitsh", such
     ///   as a Git commit hash or a Git tag, therefore anything that `git checkout` can resolve.
-    #[clap(long, verbatim_doc_comment)]
+    #[cfg_attr(feature = "clap", clap(long, verbatim_doc_comment))]
     pub spirv_builder_version: Option<String>,
 
     /// Force `rustc_codegen_spirv` to be rebuilt.
-    #[clap(long)]
+    #[cfg_attr(feature = "clap", clap(long))]
     pub rebuild_codegen: bool,
 
     /// Assume "yes" to "Install Rust toolchain: [y/n]" prompt.
     ///
     /// Defaults to `false` in cli, `true` in [`Default`]
-    #[clap(long, action)]
+    #[cfg_attr(feature = "clap", clap(long, action))]
     pub auto_install_rust_toolchain: bool,
 
     /// Clear target dir of `rustc_codegen_spirv` build after a successful build, saves about
     /// 200MiB of disk space.
-    #[clap(long = "no-clear-target", default_value = "true", action = clap::ArgAction::SetFalse)]
+    #[cfg_attr(feature = "clap", clap(long = "no-clear-target", default_value = "true", action = clap::ArgAction::SetFalse))]
     pub clear_target: bool,
 
     /// There is a tricky situation where a shader crate that depends on workspace config can have
@@ -122,7 +129,7 @@ pub struct Install {
     /// way source URLs are encoded. See these PRs for more details:
     ///   * <https://github.com/rust-lang/cargo/pull/12280>
     ///   * <https://github.com/rust-lang/cargo/pull/14595>
-    #[clap(long, action, verbatim_doc_comment)]
+    #[cfg_attr(feature = "clap", clap(long, action, verbatim_doc_comment))]
     pub force_overwrite_lockfiles_v4_to_v3: bool,
 }
 
@@ -254,10 +261,9 @@ package = "rustc_codegen_spirv"
         let rustc_codegen_spirv = dummy_metadata.find_package("rustc_codegen_spirv").context(
             "resolving toolchain version: expected a dependency on `rustc_codegen_spirv`",
         )?;
-        let toolchain_channel =
-            get_channel_from_rustc_codegen_spirv_build_script(rustc_codegen_spirv).context(
-                "resolving toolchain version: read toolchain from `rustc_codegen_spirv`'s build.rs",
-            )?;
+        let toolchain_channel = rust_gpu_toolchain_channel(rustc_codegen_spirv).context(
+            "resolving toolchain version: read toolchain from `rustc_codegen_spirv`'s build.rs",
+        )?;
         log::info!("selected toolchain channel `{toolchain_channel:?}`");
 
         log::debug!("update_spec_files");
@@ -279,7 +285,7 @@ package = "rustc_codegen_spirv"
                     .context("remove Cargo.lock")?;
             }
 
-            crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source);
+            crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source)?;
             let mut cargo = spirv_builder::cargo_cmd::CargoCmd::new();
             cargo
                 .current_dir(&install_dir)

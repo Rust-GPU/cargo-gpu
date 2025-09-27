@@ -1,5 +1,7 @@
 //! Get config from the shader crate's `Cargo.toml` `[*.metadata.rust-gpu.*]`
 
+#![cfg(feature = "clap")]
+
 use cargo_metadata::MetadataCommand;
 use serde_json::Value;
 
@@ -170,6 +172,8 @@ mod test {
 
     #[test_log::test]
     fn can_override_config_from_crate_toml() {
+        const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
+
         let mut metadata = MetadataCommand::new()
             .current_dir(env!("CARGO_MANIFEST_DIR"))
             .exec()
@@ -177,7 +181,7 @@ mod test {
         let cargo_gpu = metadata
             .packages
             .iter_mut()
-            .find(|package| package.name.contains("cargo-gpu"))
+            .find(|package| package.name.contains(PACKAGE_NAME))
             .unwrap();
         cargo_gpu.metadata = serde_json::json!({
             "rust-gpu": {

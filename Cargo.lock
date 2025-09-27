@@ -102,21 +102,39 @@ name = "cargo-gpu"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cargo-gpu-cache",
+ "clap",
+ "env_logger",
+ "log",
+]
+
+[[package]]
+name = "cargo-gpu-cache"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cargo-gpu-test-utils",
  "cargo-util-schemas",
  "cargo_metadata",
  "clap",
  "crossterm",
- "directories",
  "dunce",
- "env_logger",
  "log",
  "relative-path",
- "rustc_codegen_spirv-target-specs",
+ "rustc_codegen_spirv-cache",
  "semver",
  "serde",
  "serde_json",
  "spirv-builder",
  "test-log",
+]
+
+[[package]]
+name = "cargo-gpu-test-utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tempfile",
 ]
 
 [[package]]
@@ -1025,6 +1043,20 @@ name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc_codegen_spirv-cache"
+version = "0.1.0"
+dependencies = [
+ "cargo-gpu-test-utils",
+ "cargo-util-schemas",
+ "cargo_metadata",
+ "directories",
+ "log",
+ "rustc_codegen_spirv-target-specs",
+ "test-log",
+ "thiserror",
+]
 
 [[package]]
 name = "rustc_codegen_spirv-target-specs"

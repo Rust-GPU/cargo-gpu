@@ -1,0 +1,15 @@
+[package]
+name = "cargo-gpu-test-utils"
+description = "Shared code of `cargo-gpu` crates for testing"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

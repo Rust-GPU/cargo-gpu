@@ -2,32 +2,35 @@
 #![allow(clippy::unwrap_used, reason = "this is basically a test")]
 //! `cargo gpu build`, analogous to `cargo build`
 
-use crate::install::Install;
-use crate::linkage::Linkage;
-use crate::lockfile::LockfileMismatchHandler;
 use anyhow::Context as _;
 use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
 use std::io::Write as _;
 use std::path::PathBuf;
 
+use crate::install::Install;
+use crate::linkage::Linkage;
+use crate::lockfile::LockfileMismatchHandler;
+
 /// Args for just a build
-#[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 pub struct BuildArgs {
     /// Path to the output directory for the compiled shaders.
-    #[clap(long, short, default_value = "./")]
+    #[cfg_attr(feature = "clap", clap(long, short, default_value = "./"))]
     pub output_dir: PathBuf,
 
     /// Watch the shader crate directory and automatically recompile on changes.
-    #[clap(long, short, action)]
+    #[cfg(feature = "watch")]
+    #[cfg_attr(feature = "clap", clap(long, short, action))]
     pub watch: bool,
 
     /// the flattened [`SpirvBuilder`]
-    #[clap(flatten)]
+    #[cfg_attr(feature = "clap", clap(flatten))]
     #[serde(flatten)]
     pub spirv_builder: SpirvBuilder,
 
     ///Renames the manifest.json file to the given name
-    #[clap(long, short, default_value = "manifest.json")]
+    #[cfg_attr(feature = "clap", clap(long, short, default_value = "manifest.json"))]
     pub manifest_file: String,
 }
 
@@ -36,6 +39,7 @@ impl Default for BuildArgs {
     fn default() -> Self {
         Self {
             output_dir: PathBuf::from("./"),
+            #[cfg(feature = "watch")]
             watch: false,
             spirv_builder: SpirvBuilder::default(),
             manifest_file: String::from("manifest.json"),
@@ -44,14 +48,15 @@ impl Default for BuildArgs {
 }
 
 /// `cargo build` subcommands
-#[derive(Clone, clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 pub struct Build {
     /// CLI args for install the `rust-gpu` compiler and components
-    #[clap(flatten)]
+    #[cfg_attr(feature = "clap", clap(flatten))]
     pub install: Install,
 
     /// CLI args for configuring the build of the shader
-    #[clap(flatten)]
+    #[cfg_attr(feature = "clap", clap(flatten))]
     pub build: BuildArgs,
 }
 
@@ -89,30 +94,52 @@ impl Build {
             std::env::current_dir()?.display()
         );
 
-        if self.build.watch {
+        #[cfg(feature = "watch")]
+        let watching = self.build.watch;
+        #[cfg(not(feature = "watch"))]
+        let watching = false;
+        if watching {
+            return self.watch();
+        }
+
+        self.build()
+    }
+
+    /// Builds shader crate using [`SpirvBuilder`].
+    fn build(&self) -> anyhow::Result<()> {
+        crate::user_output!(
+            "Compiling shaders at {}...\n",
+            self.install.shader_crate.display()
+        )?;
+        let result = self.build.spirv_builder.build()?;
+        self.parse_compilation_result(&result)?;
+        Ok(())
+    }
+
+    /// Watches shader crate for changes using [`SpirvBuilder`]
+    /// or returns an error depending on presence of `watch` feature.
+    fn watch(&self) -> anyhow::Result<()> {
+        #[cfg(feature = "watch")]
+        {
             let this = self.clone();
             self.build
                 .spirv_builder
                 .watch(move |result, accept| {
-                    let result1 = this.parse_compilation_result(&result);
+                    let parse_result = this.parse_compilation_result(&result);
                     if let Some(accept) = accept {
-                        accept.submit(result1);
+                        accept.submit(parse_result);
                     }
                 })?
-                .context("unreachable")??;
-            std::thread::park();
-        } else {
-            crate::user_output!(
-                "Compiling shaders at {}...\n",
-                self.install.shader_crate.display()
-            );
-            let result = self.build.spirv_builder.build()?;
-            self.parse_compilation_result(&result)?;
+                .context("should always return the first compile result")
+                .flatten()?;
+            anyhow::bail!("unexpected end of watch")
         }
-        Ok(())
+
+        #[cfg(not(feature = "watch"))]
+        anyhow::bail!("cannot watch for changes without the `watch` feature")
     }
 
-    /// Parses compilation result from `SpirvBuilder` and writes it out to a file
+    /// Parses compilation result from [`SpirvBuilder`] and writes it out to a file
     fn parse_compilation_result(&self, result: &CompileResult) -> anyhow::Result<()> {
         let shaders = match &result.module {
             ModuleResult::MultiModule(modules) => {
@@ -175,15 +202,18 @@ impl Build {
 
 #[cfg(test)]
 mod test {
+    #![cfg(feature = "clap")]
+
+    use cargo_gpu_test_utils::{shader_crate_template_path, tests_teardown};
     use clap::Parser as _;
 
     use crate::{Cli, Command};
 
     #[test_log::test]
     fn builder_from_params() {
-        crate::test::tests_teardown();
+        tests_teardown();
 
-        let shader_crate_path = crate::test::shader_crate_template_path();
+        let shader_crate_path = shader_crate_template_path();
         let output_dir = shader_crate_path.join("shaders");
 
         let args = [

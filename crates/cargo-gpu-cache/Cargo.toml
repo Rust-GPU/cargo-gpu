@@ -1,0 +1,37 @@
+[package]
+name = "cargo-gpu-cache"
+description = "Builder of `rust-gpu` shader crates"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[dependencies]
+rustc_codegen_spirv-cache = { path = "../rustc_codegen_spirv-cache", default-features = false }
+cargo_metadata.workspace = true
+anyhow.workspace = true
+spirv-builder.workspace = true
+clap = { workspace = true, optional = true }
+log.workspace = true
+relative-path.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+crossterm.workspace = true
+semver.workspace = true
+dunce.workspace = true
+
+[dev-dependencies]
+cargo-gpu-test-utils = { path = "../cargo-gpu-test-utils" }
+test-log.workspace = true
+cargo_metadata = { workspace = true, features = ["builder"] }
+cargo-util-schemas.workspace = true
+
+[features]
+# Rebuilds target shader crate upon changes
+watch = ["spirv-builder/watch"]
+# Enables `clap` support for public structs
+clap = ["dep:clap", "spirv-builder/clap"]
+
+[lints]
+workspace = true
