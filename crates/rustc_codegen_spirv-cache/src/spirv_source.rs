@@ -251,10 +251,77 @@ pub enum ParseSourceVersionError {
     InvalidManifestPath(Utf8PathBuf),
 }
 
+/// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
+///
+/// # Errors
+///
+/// Returns an error if the package is at the root of the filesystem,
+/// build script does not exist, or there is no definition of `channel` in it.
+#[inline]
+pub fn rust_gpu_toolchain_channel(
+    rustc_codegen_spirv: &Package,
+) -> Result<String, RustGpuToolchainChannelError> {
+    let path = rustc_codegen_spirv
+        .manifest_path
+        .parent()
+        .ok_or(RustGpuToolchainChannelError::PackageAtRoot)?;
+    let build_script = path.join("build.rs");
+
+    log::debug!("Parsing `build.rs` at {build_script:?} for the used toolchain");
+    let contents = match fs::read_to_string(&build_script) {
+        Ok(contents) => contents,
+        Err(source) => {
+            let err = RustGpuToolchainChannelError::InvalidBuildScript {
+                source,
+                build_script,
+            };
+            return Err(err);
+        }
+    };
+
+    let channel_start = "channel = \"";
+    let Some(channel_line) = contents
+        .lines()
+        .find(|line| line.starts_with(channel_start))
+    else {
+        let err = RustGpuToolchainChannelError::ChannelStartNotFound {
+            channel_start: channel_start.to_owned(),
+            build_script,
+        };
+        return Err(err);
+    };
+    let start = channel_start.len();
+
+    let channel_end = "\"";
+    #[expect(clippy::string_slice, reason = "line starts with `channel_start`")]
+    let Some(end) = channel_line[start..]
+        .find(channel_end)
+        .map(|end| end + start)
+    else {
+        let err = RustGpuToolchainChannelError::ChannelEndNotFound {
+            channel_end: channel_end.to_owned(),
+            channel_line: channel_line.to_owned(),
+            build_script,
+        };
+        return Err(err);
+    };
+
+    let range = start..end;
+    let Some(channel) = channel_line.get(range.clone()) else {
+        let err = RustGpuToolchainChannelError::InvalidRange {
+            range,
+            channel_line: channel_line.to_owned(),
+            build_script,
+        };
+        return Err(err);
+    };
+    Ok(channel.to_owned())
+}
+
 /// An error indicating that getting the channel of a Rust toolchain from the package failed.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum GetChannelError {
+pub enum RustGpuToolchainChannelError {
     /// Package is located at the root of the file system
     /// and cannot have a parent.
     #[error("package located at root")]
@@ -272,7 +339,7 @@ pub enum GetChannelError {
     #[error("`{channel_start}` line in {build_script:?} not found")]
     ChannelStartNotFound {
         /// Start of the channel line.
-        channel_start: &'static str,
+        channel_start: String,
         /// Path to the build script file.
         build_script: Utf8PathBuf,
     },
@@ -281,7 +348,7 @@ pub enum GetChannelError {
     #[error("ending `{channel_end}` of line \"{channel_line}\" in {build_script:?} not found")]
     ChannelEndNotFound {
         /// End of the channel line.
-        channel_end: &'static str,
+        channel_end: String,
         /// The line containing the channel information.
         channel_line: String,
         /// Path to the build script file.
@@ -297,73 +364,6 @@ pub enum GetChannelError {
         /// Path to the build script file.
         build_script: Utf8PathBuf,
     },
-}
-
-/// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
-///
-/// # Errors
-///
-/// Returns an error if the package is at the root of the filesystem,
-/// build script does not exist, or there is no definition of `channel` in it.
-#[inline]
-pub fn get_channel_from_rustc_codegen_spirv_build_script(
-    rustc_codegen_spirv_package: &Package,
-) -> Result<String, GetChannelError> {
-    let path = rustc_codegen_spirv_package
-        .manifest_path
-        .parent()
-        .ok_or(GetChannelError::PackageAtRoot)?;
-    let build_script = path.join("build.rs");
-
-    log::debug!("Parsing `build.rs` at {build_script:?} for the used toolchain");
-    let contents = match fs::read_to_string(&build_script) {
-        Ok(contents) => contents,
-        Err(source) => {
-            let err = GetChannelError::InvalidBuildScript {
-                source,
-                build_script,
-            };
-            return Err(err);
-        }
-    };
-
-    let channel_start = "channel = \"";
-    let Some(channel_line) = contents
-        .lines()
-        .find(|line| line.starts_with(channel_start))
-    else {
-        let err = GetChannelError::ChannelStartNotFound {
-            channel_start,
-            build_script,
-        };
-        return Err(err);
-    };
-    let start = channel_start.len();
-
-    let channel_end = "\"";
-    #[expect(clippy::string_slice, reason = "line starts with `channel_start`")]
-    let Some(end) = channel_line[start..]
-        .find(channel_end)
-        .map(|end| end + start)
-    else {
-        let err = GetChannelError::ChannelEndNotFound {
-            channel_end,
-            channel_line: channel_line.to_owned(),
-            build_script,
-        };
-        return Err(err);
-    };
-
-    let range = start..end;
-    let Some(channel) = channel_line.get(range.clone()) else {
-        let err = GetChannelError::InvalidRange {
-            range,
-            channel_line: channel_line.to_owned(),
-            build_script,
-        };
-        return Err(err);
-    };
-    Ok(channel.to_owned())
 }
 
 /// Returns a string suitable to use as a directory.

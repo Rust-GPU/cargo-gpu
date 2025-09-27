@@ -12,7 +12,6 @@ rustc_codegen_spirv-cache = { path = "../rustc_codegen_spirv-cache", default-fea
 cargo_metadata.workspace = true
 anyhow.workspace = true
 spirv-builder.workspace = true
-legacy_target_specs.workspace = true
 clap = { workspace = true, optional = true }
 log.workspace = true
 relative-path.workspace = true

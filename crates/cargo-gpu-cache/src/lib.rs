@@ -52,7 +52,6 @@ mod linkage;
 mod lockfile;
 mod metadata;
 mod show;
-mod target_specs;
 
 pub use install::*;
 pub use spirv_builder;

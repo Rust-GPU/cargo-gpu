@@ -8,6 +8,7 @@ keywords.workspace = true
 license.workspace = true
 
 [dependencies]
+legacy_target_specs.workspace = true
 thiserror.workspace = true
 directories.workspace = true
 cargo_metadata.workspace = true

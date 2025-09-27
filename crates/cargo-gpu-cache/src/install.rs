@@ -6,11 +6,10 @@ use anyhow::Context as _;
 use rustc_codegen_spirv_cache::{
     cache::cache_dir,
     metadata::{query_metadata, MetadataExt as _},
-    spirv_source::{get_channel_from_rustc_codegen_spirv_build_script, SpirvSource},
+    spirv_source::{rust_gpu_toolchain_channel, SpirvSource},
+    target_specs::update_target_specs_files,
 };
 use spirv_builder::SpirvBuilder;
-
-use crate::target_specs::update_target_specs_files;
 
 /// Represents a functional backend installation, whether it was cached or just installed.
 #[derive(Clone, Debug, Default)]
@@ -262,10 +261,9 @@ package = "rustc_codegen_spirv"
         let rustc_codegen_spirv = dummy_metadata.find_package("rustc_codegen_spirv").context(
             "resolving toolchain version: expected a dependency on `rustc_codegen_spirv`",
         )?;
-        let toolchain_channel =
-            get_channel_from_rustc_codegen_spirv_build_script(rustc_codegen_spirv).context(
-                "resolving toolchain version: read toolchain from `rustc_codegen_spirv`'s build.rs",
-            )?;
+        let toolchain_channel = rust_gpu_toolchain_channel(rustc_codegen_spirv).context(
+            "resolving toolchain version: read toolchain from `rustc_codegen_spirv`'s build.rs",
+        )?;
         log::info!("selected toolchain channel `{toolchain_channel:?}`");
 
         log::debug!("update_spec_files");
