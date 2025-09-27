@@ -188,7 +188,27 @@ impl LockfileMismatchHandler {
         is_force_overwrite_lockfiles_v4_to_v3: bool,
     ) -> anyhow::Result<()> {
         if !is_force_overwrite_lockfiles_v4_to_v3 {
-            Self::exit_with_v3v4_hack_suggestion();
+            #[expect(clippy::needless_raw_strings, reason = "false positive")]
+            const V3V4_HACK_SUGGESTION: &str = r"
+Because `cargo gpu` uses a dedicated Rust toolchain for compiling shaders,
+it's possible that the `Cargo.lock` manifest version of the shader crate
+does not match the `Cargo.lock` manifest version of the workspace.
+This is due to a change in the defaults introduced in Rust 1.83.0.
+
+One way to resolve this is to force the workspace to use the same version
+of Rust as required by the shader. However, that is not often ideal or even
+possible. Another way is to exclude the shader from the workspace. This is
+also not ideal if you have many shaders sharing config from the workspace.
+
+Therefore, `cargo gpu build/install` offers a workaround with the argument:
+  --force-overwrite-lockfiles-v4-to-v3
+
+See `cargo gpu build --help` for more information.
+";
+            #[expect(clippy::non_ascii_literal, reason = "this character is really needed")]
+            {
+                anyhow::bail!("conflicting `Cargo.lock` versions detected ⚠️{V3V4_HACK_SUGGESTION}")
+            }
         }
 
         Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "4", "3")
@@ -236,32 +256,6 @@ impl LockfileMismatchHandler {
         file.write_all(new_contents.as_bytes())?;
 
         Ok(())
-    }
-
-    /// Exit and give the user advice on how to deal with the infamous
-    /// v3/v4 Cargo lockfile version problem.
-    #[expect(clippy::unwrap_used, reason = "It's CLI output")]
-    fn exit_with_v3v4_hack_suggestion() {
-        crate::user_output!(
-            "Conflicting `Cargo.lock` versions detected ⚠️\n\
-            Because `cargo gpu` uses a dedicated Rust toolchain for compiling shaders\n\
-            it's possible that the `Cargo.lock` manifest version of the shader crate\n\
-            does not match the `Cargo.lock` manifest version of the workspace. This is\n\
-            due to a change in the defaults introduced in Rust 1.83.0.\n\
-            \n\
-            One way to resolve this is to force the workspace to use the same version\n\
-            of Rust as required by the shader. However that is not often ideal or even\n\
-            possible. Another way is to exclude the shader from the workspace. This is\n\
-            also not ideal if you have many shaders sharing config from the workspace.\n\
-            \n\
-            Therefore `cargo gpu build/install` offers a workaround with the argument:\n\
-              --force-overwrite-lockfiles-v4-to-v3\n\
-            \n\
-            See `cargo gpu build --help` for more information.\n\
-            "
-        )
-        .unwrap();
-        std::process::exit(1);
     }
 }
 

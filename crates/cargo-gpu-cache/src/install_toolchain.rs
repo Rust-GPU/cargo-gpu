@@ -3,8 +3,6 @@
 use anyhow::Context as _;
 use crossterm::tty::IsTty as _;
 
-use crate::user_output;
-
 /// Use `rustup` to install the toolchain and components, if not already installed.
 ///
 /// Pretty much runs:
@@ -108,10 +106,8 @@ fn get_consent_for_toolchain_install(
     }
 
     if !std::io::stdout().is_tty() {
-        user_output!("No TTY detected so can't ask for consent to install Rust toolchain.")?;
         log::error!("Attempted to ask for consent when there's no TTY");
-        #[expect(clippy::exit, reason = "can't ask for user consent if there's no TTY")]
-        std::process::exit(1);
+        anyhow::bail!("no TTY detected, so can't ask for consent to install Rust toolchain")
     }
 
     log::debug!("asking for consent to install the required toolchain");
@@ -138,8 +134,6 @@ fn get_consent_for_toolchain_install(
     {
         Ok(())
     } else {
-        crate::user_output!("Exiting...\n")?;
-        #[expect(clippy::exit, reason = "user requested abort")]
-        std::process::exit(0);
+        anyhow::bail!("user denied to install the required toolchain\n");
     }
 }

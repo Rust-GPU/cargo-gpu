@@ -24,7 +24,7 @@ fn main() -> ExitCode {
             reason = "Our central place for outputting error messages"
         )]
         {
-            eprintln!("Error: {error}");
+            eprintln!("Error: {}", error.root_cause());
             return ExitCode::FAILURE;
         };
     }
