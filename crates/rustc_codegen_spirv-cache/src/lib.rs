@@ -24,3 +24,4 @@ pub mod cache;
 pub mod metadata;
 pub mod spirv_source;
 pub mod target_specs;
+pub mod toolchain;
