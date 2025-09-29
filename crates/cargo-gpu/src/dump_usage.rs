@@ -1,7 +1,7 @@
 //! Convenience function for internal use. Dumps all the CLI usage instructions. Useful for
 //! updating the README.
 
-use rustc_codegen_spirv_cache::user_output;
+use cargo_gpu_build::spirv_cache::user_output;
 
 use crate::Cli;
 

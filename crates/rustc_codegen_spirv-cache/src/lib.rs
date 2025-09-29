@@ -11,8 +11,11 @@
 //! toolchain, but this project loosens that requirement by managing installations
 //! of `rustc_codegen_spirv` and their associated toolchains for you.
 
-// TODO: remove this & fix documentation
-#![expect(clippy::missing_errors_doc, reason = "temporary allow this")]
+#![expect(clippy::missing_errors_doc, reason = "temporary allow this")] // TODO: remove this & fix documentation
+#![expect(clippy::pub_use, reason = "part of public API")]
+
+pub use cargo_metadata;
+pub use spirv_builder;
 
 pub mod backend;
 pub mod cache;

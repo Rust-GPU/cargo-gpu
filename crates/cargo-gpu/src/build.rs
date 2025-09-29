@@ -6,10 +6,10 @@
 use std::{io::Write as _, path::PathBuf};
 
 use anyhow::Context as _;
-use rustc_codegen_spirv_cache::user_output;
+use cargo_gpu_build::{lockfile::LockfileMismatchHandler, spirv_cache::user_output};
 use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
 
-use crate::{linkage::Linkage, lockfile::LockfileMismatchHandler, Install};
+use crate::{linkage::Linkage, Install};
 
 /// Args for just a build
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]

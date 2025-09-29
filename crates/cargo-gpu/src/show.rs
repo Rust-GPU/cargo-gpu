@@ -3,7 +3,7 @@
 use std::{fs, path::Path};
 
 use anyhow::bail;
-use rustc_codegen_spirv_cache::{
+use cargo_gpu_build::spirv_cache::{
     cache::cache_dir,
     spirv_source::{query_metadata, SpirvSource},
     target_specs::update_target_specs_files,

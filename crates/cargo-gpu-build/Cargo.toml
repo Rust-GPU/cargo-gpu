@@ -1,0 +1,17 @@
+[package]
+name = "cargo-gpu-build"
+description = "Builder of `rust-gpu` shader crates"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[dependencies]
+rustc_codegen_spirv-cache = { path = "../rustc_codegen_spirv-cache" }
+anyhow.workspace = true
+semver.workspace = true
+log.workspace = true
+
+[lints]
+workspace = true
