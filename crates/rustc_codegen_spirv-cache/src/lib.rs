@@ -11,5 +11,9 @@
 //! toolchain, but this project loosens that requirement by managing installations
 //! of `rustc_codegen_spirv` and their associated toolchains for you.
 
+// TODO: remove this & fix documentation
+#![expect(clippy::missing_errors_doc, reason = "temporary allow this")]
+
 pub mod cache;
 pub mod spirv_source;
+pub mod target_specs;

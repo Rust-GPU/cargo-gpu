@@ -63,7 +63,6 @@ mod linkage;
 mod lockfile;
 mod metadata;
 mod show;
-mod target_specs;
 mod test;
 
 pub use install::*;

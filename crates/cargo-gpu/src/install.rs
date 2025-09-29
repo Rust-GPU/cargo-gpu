@@ -9,10 +9,9 @@ use rustc_codegen_spirv_cache::{
         get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
         SpirvSource,
     },
+    target_specs::update_target_specs_files,
 };
 use spirv_builder::SpirvBuilder;
-
-use crate::target_specs::update_target_specs_files;
 
 /// Represents a functional backend installation, whether it was cached or just installed.
 #[derive(Clone, Debug, Default)]
