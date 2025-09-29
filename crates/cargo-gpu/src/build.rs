@@ -9,7 +9,7 @@ use anyhow::Context as _;
 use rustc_codegen_spirv_cache::user_output;
 use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
 
-use crate::{install::Install, linkage::Linkage, lockfile::LockfileMismatchHandler};
+use crate::{linkage::Linkage, lockfile::LockfileMismatchHandler, Install};
 
 /// Args for just a build
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]

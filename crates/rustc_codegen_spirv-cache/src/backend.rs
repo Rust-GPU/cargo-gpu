@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use rustc_codegen_spirv_cache::{
+use spirv_builder::SpirvBuilder;
+
+use crate::{
     cache::cache_dir,
     spirv_source::{
         get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
@@ -12,11 +14,11 @@ use rustc_codegen_spirv_cache::{
     target_specs::update_target_specs_files,
     toolchain, user_output,
 };
-use spirv_builder::SpirvBuilder;
 
 /// Represents a functional backend installation, whether it was cached or just installed.
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
+#[expect(clippy::module_name_repetitions, reason = "it's fine")]
 pub struct InstalledBackend {
     /// path to the `rustc_codegen_spirv` dylib
     pub rustc_codegen_spirv_location: PathBuf,
@@ -183,9 +185,6 @@ impl Install {
                     new_path.push("crates/spirv-builder");
                     format!("path = \"{new_path}\"\nversion = \"{version}\"")
                 }
-                // TODO: remove this once this module moves to rustc_codegen_spirv-cache
-                #[expect(clippy::todo, reason = "temporary allow this")]
-                _ => todo!(),
             };
             let cargo_toml = format!(
                 r#"

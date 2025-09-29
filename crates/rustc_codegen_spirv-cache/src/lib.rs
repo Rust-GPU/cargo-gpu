@@ -14,6 +14,7 @@
 // TODO: remove this & fix documentation
 #![expect(clippy::missing_errors_doc, reason = "temporary allow this")]
 
+pub mod backend;
 pub mod cache;
 pub mod spirv_source;
 pub mod target_specs;
