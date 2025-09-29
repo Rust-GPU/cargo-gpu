@@ -10,7 +10,7 @@ license.workspace = true
 default-run = "cargo-gpu"
 
 [dependencies]
-rustc_codegen_spirv-cache = { path = "../rustc_codegen_spirv-cache", default-features = false }
+cargo-gpu-build = { path = "../cargo-gpu-build", default-features = false }
 cargo_metadata.workspace = true
 anyhow.workspace = true
 spirv-builder = { workspace = true, features = ["clap", "watch"] }

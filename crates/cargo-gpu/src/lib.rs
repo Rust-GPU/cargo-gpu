@@ -56,12 +56,11 @@ mod build;
 mod config;
 mod dump_usage;
 mod linkage;
-mod lockfile;
 mod metadata;
 mod show;
 mod test;
 
-pub use rustc_codegen_spirv_cache::backend::*;
+pub use cargo_gpu_build::spirv_cache::backend::*;
 pub use spirv_builder;
 
 /// All of the available subcommands for `cargo gpu`

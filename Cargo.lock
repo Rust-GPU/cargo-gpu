@@ -102,6 +102,7 @@ name = "cargo-gpu"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cargo-gpu-build",
  "cargo_metadata",
  "clap",
  "crossterm",
@@ -109,13 +110,22 @@ dependencies = [
  "env_logger",
  "log",
  "relative-path",
- "rustc_codegen_spirv-cache",
  "semver",
  "serde",
  "serde_json",
  "spirv-builder",
  "tempfile",
  "test-log",
+]
+
+[[package]]
+name = "cargo-gpu-build"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "rustc_codegen_spirv-cache",
+ "semver",
 ]
 
 [[package]]

@@ -1,12 +1,15 @@
-//! Handles lockfile version conflicts and downgrades. Stable uses lockfile v4, but rust-gpu
-//! v0.9.0 uses an old toolchain requiring v3 and will refuse to build with a v4 lockfile being
-//! present. This module takes care of warning the user and potentially downgrading the lockfile.
+//! Handles lockfile version conflicts and downgrades.
+//!
+//! Stable uses lockfile v4, but rust-gpu v0.9.0 uses an old toolchain requiring v3
+//! and will refuse to build with a v4 lockfile being present.
+//! This module takes care of warning the user and potentially downgrading the lockfile.
+
+use std::io::Write as _;
 
 use anyhow::Context as _;
-use rustc_codegen_spirv_cache::user_output;
 use semver::Version;
-use spirv_builder::query_rustc_version;
-use std::io::Write as _;
+
+use crate::{spirv_builder::query_rustc_version, spirv_cache::user_output};
 
 /// `Cargo.lock` manifest version 4 became the default in Rust 1.83.0. Conflicting manifest
 /// versions between the workspace and the shader crate, can cause problems.
@@ -14,6 +17,8 @@ const RUST_VERSION_THAT_USES_V4_CARGO_LOCKS: Version = Version::new(1, 83, 0);
 
 /// Cargo dependency for `spirv-builder` and the rust toolchain channel.
 #[derive(Debug, Clone)]
+#[expect(clippy::module_name_repetitions, reason = "such naming is intentional")]
+#[non_exhaustive]
 pub struct LockfileMismatchHandler {
     /// `Cargo.lock`s that have had their manifest versions changed by us and need changing back.
     pub cargo_lock_files_with_changed_manifest_versions: Vec<std::path::PathBuf>,
@@ -21,6 +26,7 @@ pub struct LockfileMismatchHandler {
 
 impl LockfileMismatchHandler {
     /// Create instance
+    #[inline]
     pub fn new(
         shader_crate_path: &std::path::Path,
         toolchain_channel: &str,
@@ -198,9 +204,10 @@ impl LockfileMismatchHandler {
         Ok(())
     }
 
-    /// Once all install and builds have completed put their manifest versions back to how they
-    /// were.
-    pub fn revert_cargo_lock_manifest_versions(&self) -> anyhow::Result<()> {
+    /// Once all install and builds have completed put their manifest versions back
+    /// to how they were.
+    #[inline]
+    pub fn revert_cargo_lock_manifest_versions(&mut self) -> anyhow::Result<()> {
         for offending_cargo_lock in &self.cargo_lock_files_with_changed_manifest_versions {
             log::debug!("Reverting: {}", offending_cargo_lock.display());
             Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "3", "4")
@@ -266,6 +273,7 @@ impl LockfileMismatchHandler {
 }
 
 impl Drop for LockfileMismatchHandler {
+    #[inline]
     fn drop(&mut self) {
         let result = self.revert_cargo_lock_manifest_versions();
         if let Err(error) = result {
