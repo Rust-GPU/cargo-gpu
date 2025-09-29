@@ -63,7 +63,6 @@ mod linkage;
 mod lockfile;
 mod metadata;
 mod show;
-mod spirv_source;
 mod target_specs;
 mod test;
 
@@ -162,17 +161,4 @@ pub struct Cli {
     /// The command to run.
     #[clap(subcommand)]
     pub command: Command,
-}
-
-/// Returns a string suitable to use as a directory.
-///
-/// Created from the spirv-builder source dep and the rustc channel.
-fn to_dirname(text: &str) -> String {
-    text.replace(
-        [std::path::MAIN_SEPARATOR, '\\', '/', '.', ':', '@', '='],
-        "_",
-    )
-    .split(['{', '}', ' ', '\n', '"', '\''])
-    .collect::<Vec<_>>()
-    .concat()
 }

@@ -3,16 +3,16 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use rustc_codegen_spirv_cache::cache::cache_dir;
-use spirv_builder::SpirvBuilder;
-
-use crate::{
+use rustc_codegen_spirv_cache::{
+    cache::cache_dir,
     spirv_source::{
         get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
         SpirvSource,
     },
-    target_specs::update_target_specs_files,
 };
+use spirv_builder::SpirvBuilder;
+
+use crate::target_specs::update_target_specs_files;
 
 /// Represents a functional backend installation, whether it was cached or just installed.
 #[derive(Clone, Debug, Default)]
@@ -75,8 +75,9 @@ pub struct Install {
     pub shader_crate: PathBuf,
 
     #[expect(
+        rustdoc::bare_urls,
         clippy::doc_markdown,
-        reason = "The URL should appear literally like this. But Clippy wants a markdown clickable link"
+        reason = "The URL should appear literally like this. But Clippy & rustdoc want a markdown clickable link"
     )]
     /// Source of `spirv-builder` dependency
     /// Eg: "https://github.com/Rust-GPU/rust-gpu"
@@ -182,6 +183,9 @@ impl Install {
                     new_path.push("crates/spirv-builder");
                     format!("path = \"{new_path}\"\nversion = \"{version}\"")
                 }
+                // TODO: remove this once this module moves to rustc_codegen_spirv-cache
+                #[expect(clippy::todo, reason = "temporary allow this")]
+                _ => todo!(),
             };
             let cargo_toml = format!(
                 r#"
