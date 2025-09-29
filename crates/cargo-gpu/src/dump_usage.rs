@@ -1,7 +1,9 @@
 //! Convenience function for internal use. Dumps all the CLI usage instructions. Useful for
 //! updating the README.
 
-use crate::{user_output, Cli};
+use rustc_codegen_spirv_cache::user_output;
+
+use crate::Cli;
 
 /// main dump usage function
 pub fn dump_full_usage_for_readme() -> anyhow::Result<()> {
@@ -12,7 +14,8 @@ pub fn dump_full_usage_for_readme() -> anyhow::Result<()> {
     command.build();
 
     write_help(&mut buffer, &mut command, 0)?;
-    user_output!("{}", String::from_utf8(buffer)?);
+    let message = String::from_utf8(buffer)?;
+    user_output!(std::io::stdout(), "{message}")?;
 
     Ok(())
 }

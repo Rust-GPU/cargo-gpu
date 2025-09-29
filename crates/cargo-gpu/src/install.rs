@@ -10,6 +10,7 @@ use rustc_codegen_spirv_cache::{
         SpirvSource,
     },
     target_specs::update_target_specs_files,
+    toolchain, user_output,
 };
 use spirv_builder::SpirvBuilder;
 
@@ -275,7 +276,7 @@ package = "rustc_codegen_spirv"
             .context("writing target spec files")?;
 
         log::debug!("ensure_toolchain_and_components_exist");
-        crate::install_toolchain::ensure_toolchain_and_components_exist(
+        toolchain::ensure_toolchain_and_components_exist(
             &toolchain_channel,
             self.auto_install_rust_toolchain,
         )
@@ -289,7 +290,10 @@ package = "rustc_codegen_spirv"
                     .context("remove Cargo.lock")?;
             }
 
-            crate::user_output!("Compiling `rustc_codegen_spirv` from source {}\n", source);
+            user_output!(
+                std::io::stdout(),
+                "Compiling `rustc_codegen_spirv` from source {source}\n"
+            )?;
             let mut cargo = spirv_builder::cargo_cmd::CargoCmd::new();
             cargo
                 .current_dir(&install_dir)

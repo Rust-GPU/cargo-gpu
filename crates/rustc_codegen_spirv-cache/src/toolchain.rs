@@ -3,14 +3,13 @@
 use anyhow::Context as _;
 use crossterm::tty::IsTty as _;
 
-use crate::user_output;
-
 /// Use `rustup` to install the toolchain and components, if not already installed.
 ///
 /// Pretty much runs:
 ///
 /// * rustup toolchain add nightly-2024-04-24
 /// * rustup component add --toolchain nightly-2024-04-24 rust-src rustc-dev llvm-tools
+#[inline]
 pub fn ensure_toolchain_and_components_exist(
     channel: &str,
     skip_toolchain_install_consent: bool,
@@ -36,7 +35,7 @@ pub fn ensure_toolchain_and_components_exist(
             format!("Install {message}").as_ref(),
             skip_toolchain_install_consent,
         )?;
-        crate::user_output!("Installing {message}\n");
+        crate::user_output!(std::io::stdout(), "Installing {message}\n")?;
 
         let output_toolchain_add = std::process::Command::new("rustup")
             .args(["toolchain", "add"])
@@ -79,7 +78,7 @@ pub fn ensure_toolchain_and_components_exist(
             format!("Install {message}").as_ref(),
             skip_toolchain_install_consent,
         )?;
-        crate::user_output!("Installing {message}\n");
+        crate::user_output!(std::io::stdout(), "Installing {message}\n")?;
 
         let output_component_add = std::process::Command::new("rustup")
             .args(["component", "add", "--toolchain"])
@@ -108,7 +107,10 @@ fn get_consent_for_toolchain_install(
     }
 
     if !std::io::stdout().is_tty() {
-        user_output!("No TTY detected so can't ask for consent to install Rust toolchain.");
+        crate::user_output!(
+            std::io::stdout(),
+            "No TTY detected so can't ask for consent to install Rust toolchain."
+        )?;
         log::error!("Attempted to ask for consent when there's no TTY");
         #[expect(clippy::exit, reason = "can't ask for user consent if there's no TTY")]
         std::process::exit(1);
@@ -116,7 +118,7 @@ fn get_consent_for_toolchain_install(
 
     log::debug!("asking for consent to install the required toolchain");
     crossterm::terminal::enable_raw_mode().context("enabling raw mode")?;
-    crate::user_output!("{prompt} [y/n]: ");
+    crate::user_output!(std::io::stdout(), "{prompt} [y/n]: ")?;
     let mut input = crossterm::event::read().context("reading crossterm event")?;
 
     if let crossterm::event::Event::Key(crossterm::event::KeyEvent {
@@ -138,7 +140,7 @@ fn get_consent_for_toolchain_install(
     {
         Ok(())
     } else {
-        crate::user_output!("Exiting...\n");
+        crate::user_output!(std::io::stdout(), "Exiting...\n")?;
         #[expect(clippy::exit, reason = "user requested abort")]
         std::process::exit(0);
     }

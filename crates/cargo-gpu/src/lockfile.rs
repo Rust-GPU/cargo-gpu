@@ -3,6 +3,7 @@
 //! present. This module takes care of warning the user and potentially downgrading the lockfile.
 
 use anyhow::Context as _;
+use rustc_codegen_spirv_cache::user_output;
 use semver::Version;
 use spirv_builder::query_rustc_version;
 use std::io::Write as _;
@@ -188,7 +189,7 @@ impl LockfileMismatchHandler {
         is_force_overwrite_lockfiles_v4_to_v3: bool,
     ) -> anyhow::Result<()> {
         if !is_force_overwrite_lockfiles_v4_to_v3 {
-            Self::exit_with_v3v4_hack_suggestion();
+            Self::exit_with_v3v4_hack_suggestion()?;
         }
 
         Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "4", "3")
@@ -240,9 +241,9 @@ impl LockfileMismatchHandler {
 
     /// Exit and give the user advice on how to deal with the infamous v3/v4 Cargo lockfile version
     /// problem.
-    #[expect(clippy::non_ascii_literal, reason = "It's CLI output")]
-    fn exit_with_v3v4_hack_suggestion() {
-        crate::user_output!(
+    fn exit_with_v3v4_hack_suggestion() -> anyhow::Result<()> {
+        user_output!(
+            std::io::stdout(),
             "Conflicting `Cargo.lock` versions detected ⚠️\n\
             Because `cargo gpu` uses a dedicated Rust toolchain for compiling shaders\n\
             it's possible that the `Cargo.lock` manifest version of the shader crate\n\
@@ -259,7 +260,7 @@ impl LockfileMismatchHandler {
             \n\
             See `cargo gpu build --help` for more information.\n\
             "
-        );
+        )?;
         std::process::exit(1);
     }
 }

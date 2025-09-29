@@ -58,7 +58,6 @@ mod build;
 mod config;
 mod dump_usage;
 mod install;
-mod install_toolchain;
 mod linkage;
 mod lockfile;
 mod metadata;
@@ -67,30 +66,6 @@ mod test;
 
 pub use install::*;
 pub use spirv_builder;
-
-/// Central function to write to the user.
-#[macro_export]
-macro_rules! user_output {
-    ($($args: tt)*) => {
-        #[allow(
-            clippy::allow_attributes,
-            clippy::useless_attribute,
-            unused_imports,
-            reason = "`std::io::Write` is only sometimes called??"
-        )]
-        use std::io::Write as _;
-
-        #[expect(
-            clippy::non_ascii_literal,
-            reason = "CRAB GOOD. CRAB IMPORTANT."
-        )]
-        {
-            print!("🦀 ");
-        }
-        print!($($args)*);
-        std::io::stdout().flush().unwrap();
-   }
-}
 
 /// All of the available subcommands for `cargo gpu`
 #[derive(clap::Subcommand)]
