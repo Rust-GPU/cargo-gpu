@@ -17,3 +17,24 @@
 pub mod cache;
 pub mod spirv_source;
 pub mod target_specs;
+pub mod toolchain;
+
+/// Writes formatted user output into a [writer](std::io::Write).
+#[macro_export]
+macro_rules! user_output {
+    ($dst:expr, $($args:tt)*) => {{
+        #[allow(
+            clippy::allow_attributes,
+            clippy::useless_attribute,
+            unused_imports,
+            reason = "`std::io::Write` is only sometimes called??"
+        )]
+        use ::std::io::Write as _;
+
+        let mut writer = $dst;
+        #[expect(clippy::non_ascii_literal, reason = "CRAB GOOD. CRAB IMPORTANT.")]
+        ::std::write!(writer, "🦀 ")
+            .and_then(|()| ::std::write!(writer, $($args)*))
+            .and_then(|()| ::std::io::Write::flush(&mut writer))
+    }};
+}

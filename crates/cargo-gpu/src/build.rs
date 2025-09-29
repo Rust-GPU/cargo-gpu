@@ -1,14 +1,15 @@
-#![allow(clippy::shadow_reuse, reason = "let's not be silly")]
-#![allow(clippy::unwrap_used, reason = "this is basically a test")]
 //! `cargo gpu build`, analogous to `cargo build`
 
-use crate::install::Install;
-use crate::linkage::Linkage;
-use crate::lockfile::LockfileMismatchHandler;
+#![allow(clippy::shadow_reuse, reason = "let's not be silly")]
+#![allow(clippy::unwrap_used, reason = "this is basically a test")]
+
+use std::{io::Write as _, path::PathBuf};
+
 use anyhow::Context as _;
+use rustc_codegen_spirv_cache::user_output;
 use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
-use std::io::Write as _;
-use std::path::PathBuf;
+
+use crate::{install::Install, linkage::Linkage, lockfile::LockfileMismatchHandler};
 
 /// Args for just a build
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -102,10 +103,11 @@ impl Build {
                 .context("unreachable")??;
             std::thread::park();
         } else {
-            crate::user_output!(
+            user_output!(
+                std::io::stdout(),
                 "Compiling shaders at {}...\n",
                 self.install.shader_crate.display()
-            );
+            )?;
             let result = self.build.spirv_builder.build()?;
             self.parse_compilation_result(&result)?;
         }
