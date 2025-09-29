@@ -1032,10 +1032,13 @@ dependencies = [
  "anyhow",
  "cargo-util-schemas",
  "cargo_metadata",
+ "clap",
  "crossterm",
  "directories",
  "log",
  "rustc_codegen_spirv-target-specs",
+ "serde",
+ "spirv-builder",
  "test-log",
  "thiserror",
 ]

@@ -8,6 +8,7 @@ keywords.workspace = true
 license.workspace = true
 
 [dependencies]
+spirv-builder.workspace = true
 legacy_target_specs.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
@@ -15,6 +16,8 @@ log.workspace = true
 directories.workspace = true
 cargo_metadata.workspace = true
 crossterm.workspace = true
+clap.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 test-log.workspace = true

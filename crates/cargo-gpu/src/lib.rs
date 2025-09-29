@@ -50,21 +50,18 @@
 //! conduct other post-processing, like converting the `spv` files into `wgsl` files,
 //! for example.
 
-use crate::dump_usage::dump_full_usage_for_readme;
-use build::Build;
-use show::Show;
+use self::{build::Build, dump_usage::dump_full_usage_for_readme, show::Show};
 
 mod build;
 mod config;
 mod dump_usage;
-mod install;
 mod linkage;
 mod lockfile;
 mod metadata;
 mod show;
 mod test;
 
-pub use install::*;
+pub use rustc_codegen_spirv_cache::backend::*;
 pub use spirv_builder;
 
 /// All of the available subcommands for `cargo gpu`
