@@ -8,6 +8,7 @@ keywords.workspace = true
 license.workspace = true
 
 [dependencies]
+legacy_target_specs.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 log.workspace = true

@@ -26,12 +26,15 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use cargo_metadata::Metadata;
-use rustc_codegen_spirv_cache::{
+
+use crate::{
     cache::cache_dir,
     spirv_source::{FindPackage as _, SpirvSource},
 };
 
 /// Extract legacy target specs from our executable into some directory
+#[inline]
+#[expect(clippy::module_name_repetitions, reason = "such naming is intentional")]
 pub fn write_legacy_target_specs(target_spec_dir: &Path) -> anyhow::Result<()> {
     std::fs::create_dir_all(target_spec_dir)?;
     for (filename, contents) in legacy_target_specs::TARGET_SPECS {
@@ -57,6 +60,7 @@ fn copy_spec_files(src: &Path, dst: &Path) -> anyhow::Result<()> {
 }
 
 /// Computes the `target-specs` directory to use and updates the target spec files, if enabled.
+#[inline]
 pub fn update_target_specs_files(
     source: &SpirvSource,
     dummy_metadata: &Metadata,

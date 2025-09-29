@@ -4,9 +4,6 @@
 //! version. Then with that we `git checkout` the `rust-gpu` repo that corresponds to that version.
 //! From there we can look at the source code to get the required Rust toolchain.
 
-// TODO: remove this & fix documentation
-#![expect(clippy::missing_errors_doc, reason = "temporary allow")]
-
 use std::{
     fs,
     path::{Path, PathBuf},
