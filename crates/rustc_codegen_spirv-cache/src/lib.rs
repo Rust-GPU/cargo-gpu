@@ -12,3 +12,4 @@
 //! of `rustc_codegen_spirv` and their associated toolchains for you.
 
 pub mod cache;
+pub mod spirv_source;

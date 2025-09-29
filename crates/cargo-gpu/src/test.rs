@@ -20,6 +20,7 @@ fn copy_dir_all(
     }
     Ok(())
 }
+
 pub fn shader_crate_template_path() -> std::path::PathBuf {
     let project_base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     project_base.join("../shader-crate-template")

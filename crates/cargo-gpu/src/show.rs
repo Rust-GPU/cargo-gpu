@@ -3,12 +3,12 @@
 use std::{fs, path::Path};
 
 use anyhow::bail;
-use rustc_codegen_spirv_cache::cache::cache_dir;
-
-use crate::{
+use rustc_codegen_spirv_cache::{
+    cache::cache_dir,
     spirv_source::{query_metadata, SpirvSource},
-    target_specs::update_target_specs_files,
 };
+
+use crate::target_specs::update_target_specs_files;
 
 /// Show the computed source of the spirv-std dependency.
 #[derive(Clone, Debug, clap::Parser)]
