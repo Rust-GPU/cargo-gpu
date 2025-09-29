@@ -1,11 +1,14 @@
 //! Display various information about `cargo gpu`, eg its cache directory.
 
-use crate::cache_dir;
-use crate::spirv_source::{query_metadata, SpirvSource};
-use crate::target_specs::update_target_specs_files;
+use std::{fs, path::Path};
+
 use anyhow::bail;
-use std::fs;
-use std::path::Path;
+use rustc_codegen_spirv_cache::cache::cache_dir;
+
+use crate::{
+    spirv_source::{query_metadata, SpirvSource},
+    target_specs::update_target_specs_files,
+};
 
 /// Show the computed source of the spirv-std dependency.
 #[derive(Clone, Debug, clap::Parser)]

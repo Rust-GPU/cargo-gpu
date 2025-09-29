@@ -50,8 +50,6 @@
 //! conduct other post-processing, like converting the `spv` files into `wgsl` files,
 //! for example.
 
-use anyhow::Context as _;
-
 use crate::dump_usage::dump_full_usage_for_readme;
 use build::Build;
 use show::Show;
@@ -164,26 +162,6 @@ pub struct Cli {
     /// The command to run.
     #[clap(subcommand)]
     pub command: Command,
-}
-
-/// The central cache directory of cargo gpu
-///
-/// # Errors
-/// may fail if we can't find the user home directory
-#[inline]
-pub fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
-    let dir = directories::BaseDirs::new()
-        .with_context(|| "could not find the user home directory")?
-        .cache_dir()
-        .join("rust-gpu");
-
-    Ok(if cfg!(test) {
-        let thread_id = std::thread::current().id();
-        let id = format!("{thread_id:?}").replace('(', "-").replace(')', "");
-        dir.join("tests").join(id)
-    } else {
-        dir
-    })
 }
 
 /// Returns a string suitable to use as a directory.

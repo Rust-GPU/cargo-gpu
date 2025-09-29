@@ -1,8 +1,8 @@
 //! utilities for tests
+
 #![cfg(test)]
 
-use crate::cache_dir;
-use std::io::Write as _;
+use std::{cell::RefCell, io::Write as _};
 
 fn copy_dir_all(
     src: impl AsRef<std::path::Path>,
@@ -20,16 +20,23 @@ fn copy_dir_all(
     }
     Ok(())
 }
-
 pub fn shader_crate_template_path() -> std::path::PathBuf {
     let project_base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     project_base.join("../shader-crate-template")
 }
 
+thread_local! {
+    static TEMPDIR: RefCell<Option<tempfile::TempDir>> = RefCell::new(Some(
+        tempfile::TempDir::with_prefix("shader_crate").unwrap(),
+    ));
+}
+
 pub fn shader_crate_test_path() -> std::path::PathBuf {
-    let shader_crate_path = crate::cache_dir().unwrap().join("shader_crate");
-    copy_dir_all(shader_crate_template_path(), shader_crate_path.clone()).unwrap();
-    shader_crate_path
+    TEMPDIR.with_borrow(|tempdir| {
+        let shader_crate_path = tempdir.as_ref().unwrap().path();
+        copy_dir_all(shader_crate_template_path(), shader_crate_path).unwrap();
+        shader_crate_path.to_path_buf()
+    })
 }
 
 pub fn overwrite_shader_cargo_toml(shader_crate_path: &std::path::Path) -> std::fs::File {
@@ -45,9 +52,7 @@ pub fn overwrite_shader_cargo_toml(shader_crate_path: &std::path::Path) -> std::
 }
 
 pub fn tests_teardown() {
-    let cache_dir = cache_dir().unwrap();
-    if !cache_dir.exists() {
-        return;
-    }
-    std::fs::remove_dir_all(cache_dir).unwrap();
+    TEMPDIR.with_borrow_mut(|tempdir| {
+        tempdir.take().unwrap().close().unwrap();
+    });
 }

@@ -1,0 +1,15 @@
+[package]
+name = "rustc_codegen_spirv-cache"
+description = "Cacher of `rust-gpu` codegen for required toolchain"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+directories.workspace = true
+
+[lints]
+workspace = true

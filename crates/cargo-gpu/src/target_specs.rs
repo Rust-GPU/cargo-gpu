@@ -22,11 +22,13 @@
 //!   was implemented, so we can support both old and new target specs without having to worry
 //!   which version of cargo gpu you are using. It'll "just work".
 
-use crate::cache_dir;
-use crate::spirv_source::{FindPackage as _, SpirvSource};
+use std::path::{Path, PathBuf};
+
 use anyhow::Context as _;
 use cargo_metadata::Metadata;
-use std::path::{Path, PathBuf};
+use rustc_codegen_spirv_cache::cache::cache_dir;
+
+use crate::spirv_source::{FindPackage as _, SpirvSource};
 
 /// Extract legacy target specs from our executable into some directory
 pub fn write_legacy_target_specs(target_spec_dir: &Path) -> anyhow::Result<()> {
