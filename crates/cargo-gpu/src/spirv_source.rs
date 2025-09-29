@@ -4,12 +4,18 @@
 //! version. Then with that we `git checkout` the `rust-gpu` repo that corresponds to that version.
 //! From there we can look at the source code to get the required Rust toolchain.
 
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
 use anyhow::Context as _;
-use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
-use cargo_metadata::semver::Version;
-use cargo_metadata::{Metadata, MetadataCommand, Package};
-use std::fs;
-use std::path::{Path, PathBuf};
+use cargo_metadata::{
+    camino::{Utf8Path, Utf8PathBuf},
+    semver::Version,
+    Metadata, MetadataCommand, Package,
+};
+use rustc_codegen_spirv_cache::cache::cache_dir;
 
 #[expect(
     clippy::doc_markdown,
@@ -121,7 +127,7 @@ impl SpirvSource {
             } => Ok(rust_gpu_repo_root.as_std_path().to_owned()),
             Self::CratesIO { .. } | Self::Git { .. } => {
                 let dir = crate::to_dirname(self.to_string().as_ref());
-                Ok(crate::cache_dir()?.join("codegen").join(dir))
+                Ok(cache_dir()?.join("codegen").join(dir))
             }
         }
     }

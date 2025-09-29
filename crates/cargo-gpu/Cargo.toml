@@ -1,22 +1,21 @@
 [package]
 name = "cargo-gpu"
-version = "0.1.0"
-edition = "2021"
 description = "Generates shader .spv files from rust-gpu shader crates"
-repository = "https://github.com/Rust-GPU/cargo-gpu"
 readme = "../../README.md"
-keywords = ["gpu", "compiler", "rust-gpu"]
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
 default-run = "cargo-gpu"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+rustc_codegen_spirv-cache = { path = "../rustc_codegen_spirv-cache", default-features = false }
 cargo_metadata.workspace = true
 anyhow.workspace = true
 spirv-builder = { workspace = true, features = ["clap", "watch"] }
 legacy_target_specs.workspace = true
 clap.workspace = true
-directories.workspace = true
 env_logger.workspace = true
 log.workspace = true
 relative-path.workspace = true
@@ -27,9 +26,10 @@ semver.workspace = true
 dunce.workspace = true
 
 [dev-dependencies]
+tempfile.workspace = true
 test-log.workspace = true
 cargo_metadata = { workspace = true, features = ["builder"] }
-cargo-util-schemas = "0.8.2"
+cargo-util-schemas.workspace = true
 
 [lints]
 workspace = true

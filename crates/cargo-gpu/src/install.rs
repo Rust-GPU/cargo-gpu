@@ -1,13 +1,18 @@
 //! Install a dedicated per-shader crate that has the `rust-gpu` compiler in it.
 
-use crate::spirv_source::{
-    get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
-};
-use crate::target_specs::update_target_specs_files;
-use crate::{cache_dir, spirv_source::SpirvSource};
-use anyhow::Context as _;
-use spirv_builder::SpirvBuilder;
 use std::path::{Path, PathBuf};
+
+use anyhow::Context as _;
+use rustc_codegen_spirv_cache::cache::cache_dir;
+use spirv_builder::SpirvBuilder;
+
+use crate::{
+    spirv_source::{
+        get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
+        SpirvSource,
+    },
+    target_specs::update_target_specs_files,
+};
 
 /// Represents a functional backend installation, whether it was cached or just installed.
 #[derive(Clone, Debug, Default)]
