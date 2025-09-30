@@ -5,67 +5,115 @@
 //! their target specs:
 //! * "ancient" versions such as 0.9.0 or earlier do not need target specs, just passing the target
 //!   string (`spirv-unknown-vulkan1.2`) directly is sufficient. We still prep target-specs for them
-//!   like the "legacy" variant below, spirv-builder
-//!   [will just ignore it](https://github.com/Rust-GPU/rust-gpu/blob/369122e1703c0c32d3d46f46fa11ccf12667af03/crates/spirv-builder/src/lib.rs#L987)
+//!   like the "legacy" variant below, spirv-builder will just [ignore] it.
 //! * "legacy" versions require target specs to compile, which is a requirement introduced by some
 //!   rustc version. Back then it was decided that cargo gpu would ship them, as they'd probably
 //!   never change, right? So now we're stuck with having to ship these "legacy" target specs with
-//!   cargo gpu *forever*. These are the symbol `legacy_target_specs::TARGET_SPECS`, with
-//!   `legacy_target_specs` being a **fixed** version of `rustc_codegen_spirv-target-specs`,
-//!   which must **never** update.
-//! * As of [PR 256](https://github.com/Rust-GPU/rust-gpu/pull/256), `rustc_codegen_spirv` now has
-//!   a direct dependency on `rustc_codegen_spirv-target-specs`, allowing cargo gpu to pull the
-//!   required target specs directly from that dependency. At this point, the target specs are
-//!   still the same as the legacy target specs.
-//! * The [edition 2024 PR](https://github.com/Rust-GPU/rust-gpu/pull/249) must update the
-//!   target specs to comply with newly added validation within rustc. This is why the new system
-//!   was implemented, so we can support both old and new target specs without having to worry
-//!   which version of cargo gpu you are using. It'll "just work".
+//!   cargo gpu *forever*. These are [`TARGET_SPECS`] from a **fixed** version
+//!   of [`rustc_codegen_spirv-target-specs`] which must **never** update.
+//! * As of [PR 256], `rustc_codegen_spirv` now has a direct dependency on [`rustc_codegen_spirv-target-specs`],
+//!   allowing cargo gpu to pull the required target specs directly from that dependency.
+//!   At this point, the target specs are still the same as the legacy target specs.
+//! * The [edition 2024 PR] must update the target specs to comply with newly added validation within rustc.
+//!   This is why the new system was implemented, so we can support both old and new target specs
+//!   without having to worry which version of cargo gpu you are using.
+//!   It'll "just work".
+//!
+//! [ignore]: https://github.com/Rust-GPU/rust-gpu/blob/369122e1703c0c32d3d46f46fa11ccf12667af03/crates/spirv-builder/src/lib.rs#L987
+//! [`TARGET_SPECS`]: legacy_target_specs::TARGET_SPECS
+//! [`rustc_codegen_spirv-target-specs`]: legacy_target_specs
+//! [PR 256]: https://github.com/Rust-GPU/rust-gpu/pull/256
+//! [edition 2024 PR]: https://github.com/Rust-GPU/rust-gpu/pull/249
 
-use std::path::{Path, PathBuf};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
-use anyhow::Context as _;
 use cargo_metadata::Metadata;
 
 use crate::{
-    cache::cache_dir,
-    spirv_source::{FindPackage as _, SpirvSource},
+    cache::{cache_dir, CacheDirError},
+    metadata::MetadataExt as _,
+    spirv_source::SpirvSource,
 };
 
-/// Extract legacy target specs from our executable into some directory
+/// Extract legacy target specs from our executable into the directory by given path.
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be created
+/// or if any target spec json cannot be written into a file.
 #[inline]
-#[expect(clippy::module_name_repetitions, reason = "such naming is intentional")]
-pub fn write_legacy_target_specs(target_spec_dir: &Path) -> anyhow::Result<()> {
-    std::fs::create_dir_all(target_spec_dir)?;
+#[expect(clippy::module_name_repetitions, reason = "this is intentional")]
+pub fn write_legacy_target_specs(
+    target_spec_dir: &Path,
+) -> Result<(), WriteLegacyTargetSpecsError> {
+    if let Err(source) = fs::create_dir_all(target_spec_dir) {
+        let path = target_spec_dir.to_path_buf();
+        return Err(WriteLegacyTargetSpecsError::CreateDir { path, source });
+    }
+
     for (filename, contents) in legacy_target_specs::TARGET_SPECS {
         let path = target_spec_dir.join(filename);
-        std::fs::write(&path, contents.as_bytes())
-            .with_context(|| format!("writing legacy target spec file at [{}]", path.display()))?;
+        if let Err(source) = fs::write(&path, contents.as_bytes()) {
+            return Err(WriteLegacyTargetSpecsError::WriteFile { path, source });
+        }
     }
     Ok(())
 }
 
-/// Copy spec files from one dir to another, assuming no subdirectories
-fn copy_spec_files(src: &Path, dst: &Path) -> anyhow::Result<()> {
-    std::fs::create_dir_all(dst)?;
-    let dir = std::fs::read_dir(src)?;
+/// An error indicating a failure to write target specs files.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum WriteLegacyTargetSpecsError {
+    /// Failed to create the target specs directory.
+    #[error("failed to create target specs directory at {path}: {source}")]
+    CreateDir {
+        /// Path of the target specs directory.
+        path: PathBuf,
+        /// Source of the error.
+        source: io::Error,
+    },
+    /// Failed to write a target spec file.
+    #[error("failed to write target spec file at {path}: {source}")]
+    WriteFile {
+        /// Path of the target spec file.
+        path: PathBuf,
+        /// Source of the error.
+        source: io::Error,
+    },
+}
+
+/// Copy spec files from one dir to another, assuming no subdirectories.
+fn copy_spec_files(src: &Path, dst: &Path) -> io::Result<()> {
+    fs::create_dir_all(dst)?;
+    let dir = fs::read_dir(src)?;
     for dir_entry in dir {
         let file = dir_entry?;
         let file_path = file.path();
         if file_path.is_file() {
-            std::fs::copy(file_path, dst.join(file.file_name()))?;
+            fs::copy(file_path, dst.join(file.file_name()))?;
         }
     }
     Ok(())
 }
 
 /// Computes the `target-specs` directory to use and updates the target spec files, if enabled.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * cache directory is not available,
+/// * legacy target specs dependency is invalid,
+/// * target specs files cannot be copied,
+/// * or legacy target specs cannot be written.
 #[inline]
 pub fn update_target_specs_files(
     source: &SpirvSource,
-    dummy_metadata: &Metadata,
+    metadata: &Metadata,
     update_files: bool,
-) -> anyhow::Result<PathBuf> {
+) -> Result<PathBuf, UpdateTargetSpecsFilesError> {
     log::info!(
         "target-specs: Resolving target specs `{}`",
         if update_files {
@@ -76,21 +124,21 @@ pub fn update_target_specs_files(
     );
 
     let mut target_specs_dst = source.install_dir()?.join("target-specs");
-    if let Ok(target_specs) = dummy_metadata.find_package("rustc_codegen_spirv-target-specs") {
+    if let Ok(target_specs) = metadata.find_package("rustc_codegen_spirv-target-specs") {
         log::info!(
             "target-specs: found crate `rustc_codegen_spirv-target-specs` with manifest at `{}`",
             target_specs.manifest_path
         );
 
         let target_specs_src = target_specs
-                .manifest_path
-                .as_std_path()
-                .parent()
-                .and_then(|root| {
-                    let src = root.join("target-specs");
-                    src.is_dir().then_some(src)
-                })
-                .context("Could not find `target-specs` directory within `rustc_codegen_spirv-target-specs` dependency")?;
+            .manifest_path
+            .as_std_path()
+            .parent()
+            .and_then(|root| {
+                let src = root.join("target-specs");
+                src.is_dir().then_some(src)
+            })
+            .ok_or(UpdateTargetSpecsFilesError::InvalidLegacy)?;
         log::info!(
             "target-specs: found `rustc_codegen_spirv-target-specs` with `target-specs` directory `{}`",
             target_specs_dst.display()
@@ -112,7 +160,7 @@ pub fn update_target_specs_files(
             );
             if update_files {
                 copy_spec_files(&target_specs_src, &target_specs_dst)
-                    .context("copying target-specs json files")?;
+                    .map_err(UpdateTargetSpecsFilesError::CopySpecFiles)?;
             }
         }
     } else {
@@ -139,4 +187,22 @@ pub fn update_target_specs_files(
     }
 
     Ok(target_specs_dst)
+}
+
+/// An error indicating a failure to update target specs files.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum UpdateTargetSpecsFilesError {
+    /// There is no cache directory available.
+    #[error(transparent)]
+    CacheDir(#[from] CacheDirError),
+    /// Legacy target specs dependency is invalid.
+    #[error("could not find `target-specs` directory within `rustc_codegen_spirv-target-specs` dependency")]
+    InvalidLegacy,
+    /// Could not copy target specs files.
+    #[error("could not copy target specs files: {0}")]
+    CopySpecFiles(#[source] io::Error),
+    /// Could not write legacy target specs.
+    #[error("could not write legacy target specs ({0})")]
+    WriteLegacy(#[from] WriteLegacyTargetSpecsError),
 }

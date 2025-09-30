@@ -4,25 +4,32 @@
 //! version. Then with that we `git checkout` the `rust-gpu` repo that corresponds to that version.
 //! From there we can look at the source code to get the required Rust toolchain.
 
+use core::{
+    fmt::{self, Display},
+    ops::Range,
+};
 use std::{
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
 
-use anyhow::Context as _;
 use cargo_metadata::{
     camino::{Utf8Path, Utf8PathBuf},
     semver::Version,
-    Metadata, MetadataCommand, Package,
+    Package,
 };
 
-use crate::cache::cache_dir;
+use crate::{
+    cache::{cache_dir, CacheDirError},
+    metadata::{query_metadata, MetadataExt as _, MissingPackageError, QueryMetadataError},
+};
 
 #[expect(
     rustdoc::bare_urls,
     clippy::doc_markdown,
     reason = "The URL should appear literally like this. But Clippy & rustdoc want a markdown clickable link"
 )]
+#[expect(clippy::exhaustive_enums, reason = "It is expected to be exhaustive")]
 /// The source and version of `rust-gpu`.
 /// Eg:
 ///   * From crates.io with version "0.10.0"
@@ -31,7 +38,6 @@ use crate::cache::cache_dir;
 ///     - a revision of "abc213"
 ///   * a local Path
 #[derive(Eq, PartialEq, Clone, Debug)]
-#[non_exhaustive]
 pub enum SpirvSource {
     /// If the shader specifies a simple version like `spirv-std = "0.9.0"` then the source of
     /// `rust-gpu` is the conventional crates.io version.
@@ -56,13 +62,13 @@ pub enum SpirvSource {
     },
 }
 
-impl core::fmt::Display for SpirvSource {
+impl Display for SpirvSource {
     #[expect(
         clippy::min_ident_chars,
         reason = "It's a core library trait implementation"
     )]
     #[inline]
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::CratesIO(version) => version.fmt(f),
             Self::Git { url, rev } => {
@@ -82,64 +88,70 @@ impl core::fmt::Display for SpirvSource {
 }
 
 impl SpirvSource {
-    /// Figures out which source of `rust-gpu` to use
+    /// Figures out which source of `rust-gpu` to use.
+    ///
+    /// # Errors
+    ///
+    /// If unable to determine the source of `rust-gpu`, returns an error.
     #[inline]
     pub fn new(
         shader_crate_path: &Path,
         maybe_rust_gpu_source: Option<&str>,
         maybe_rust_gpu_version: Option<&str>,
-    ) -> anyhow::Result<Self> {
-        let source = if let Some(rust_gpu_version) = maybe_rust_gpu_version {
-            if let Some(rust_gpu_source) = maybe_rust_gpu_source {
-                Self::Git {
-                    url: rust_gpu_source.to_owned(),
-                    rev: rust_gpu_version.to_owned(),
-                }
-            } else {
-                Self::CratesIO(Version::parse(rust_gpu_version)?)
-            }
-        } else {
-            Self::get_rust_gpu_deps_from_shader(shader_crate_path).with_context(|| {
-                format!(
-                    "get spirv-std dependency from shader crate '{}'",
-                    shader_crate_path.display()
-                )
-            })?
-        };
-        Ok(source)
+    ) -> Result<Self, SpirvSourceError> {
+        match (maybe_rust_gpu_source, maybe_rust_gpu_version) {
+            (Some(rust_gpu_source), Some(rust_gpu_version)) => Ok(Self::Git {
+                url: rust_gpu_source.to_owned(),
+                rev: rust_gpu_version.to_owned(),
+            }),
+            (None, Some(rust_gpu_version)) => Ok(Self::CratesIO(Version::parse(rust_gpu_version)?)),
+            _ => Self::get_rust_gpu_deps_from_shader(shader_crate_path),
+        }
     }
 
-    /// Look into the shader crate to get the version of `rust-gpu` it's using.
+    /// Look into the shader crate to get the source and version of `rust-gpu` it's using.
+    ///
+    /// # Errors
+    ///
+    /// If unable to determine the source and version of `rust-gpu`, returns an error.
     #[inline]
-    pub fn get_rust_gpu_deps_from_shader(shader_crate_path: &Path) -> anyhow::Result<Self> {
+    pub fn get_rust_gpu_deps_from_shader(
+        shader_crate_path: &Path,
+    ) -> Result<Self, SpirvSourceError> {
         let crate_metadata = query_metadata(shader_crate_path)?;
         let spirv_std_package = crate_metadata.find_package("spirv-std")?;
         let spirv_source = Self::parse_spirv_std_source_and_version(spirv_std_package)?;
+
         log::debug!(
-            "Parsed `SpirvSource` from crate `{}`: \
-            {spirv_source:?}",
+            "Parsed `SpirvSource` from crate `{}`: {spirv_source:?}",
             shader_crate_path.display(),
         );
         Ok(spirv_source)
     }
 
-    /// Convert the `SpirvSource` to a cache directory in which we can build it.
+    /// Convert self into a cache directory in which we can build it.
+    ///
     /// It needs to be dynamically created because an end-user might want to swap out the source,
     /// maybe using their own fork for example.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no cache directory available.
     #[inline]
-    pub fn install_dir(&self) -> anyhow::Result<PathBuf> {
-        match self {
+    pub fn install_dir(&self) -> Result<PathBuf, CacheDirError> {
+        let dir = match self {
             Self::Path {
                 rust_gpu_repo_root, ..
-            } => Ok(rust_gpu_repo_root.as_std_path().to_owned()),
+            } => rust_gpu_repo_root.as_std_path().to_owned(),
             Self::CratesIO { .. } | Self::Git { .. } => {
                 let dir = to_dirname(self.to_string().as_ref());
-                Ok(cache_dir()?.join("codegen").join(dir))
+                cache_dir()?.join("codegen").join(dir)
             }
-        }
+        };
+        Ok(dir)
     }
 
-    /// Returns true if self is a Path
+    /// Returns `true` if self is a [`Path`](SpirvSource::Path).
     #[expect(
         clippy::must_use_candidate,
         reason = "calculations are cheap, `bool` is `Copy`"
@@ -153,15 +165,17 @@ impl SpirvSource {
     ///   `spirv-std v0.9.0 (https://github.com/Rust-GPU/rust-gpu?rev=54f6978c#54f6978c) (*)`
     /// Which would return:
     ///   `SpirvSource::Git("https://github.com/Rust-GPU/rust-gpu", "54f6978c")`
-    fn parse_spirv_std_source_and_version(spirv_std_package: &Package) -> anyhow::Result<Self> {
+    fn parse_spirv_std_source_and_version(
+        spirv_std_package: &Package,
+    ) -> Result<Self, ParseSourceVersionError> {
         log::trace!("parsing spirv-std source and version from package: '{spirv_std_package:?}'");
 
-        let result = if let Some(source) = &spirv_std_package.source {
+        let result = if let Some(source) = spirv_std_package.source.clone() {
             let is_git = source.repr.starts_with("git+");
             let is_crates_io = source.is_crates_io();
 
             match (is_git, is_crates_io) {
-                (true, true) => anyhow::bail!("parsed both git and crates.io?"),
+                (true, true) => return Err(ParseSourceVersionError::AmbiguousSource(source)),
                 (true, false) => {
                     let parse_git = || {
                         let link = &source.repr.get(4..)?;
@@ -171,25 +185,23 @@ impl SpirvSource {
                         let rev = link.get(sharp_index + 1..)?.to_owned();
                         Some(Self::Git { url, rev })
                     };
-                    parse_git()
-                        .with_context(|| format!("Failed to parse git url {}", &source.repr))?
+                    parse_git().ok_or(ParseSourceVersionError::InvalidGitSource(source))?
                 }
                 (false, true) => Self::CratesIO(spirv_std_package.version.clone()),
-                (false, false) => {
-                    anyhow::bail!("Metadata of spirv-std package uses unknown url format!")
-                }
+                (false, false) => return Err(ParseSourceVersionError::UnknownSource(source)),
             }
         } else {
-            let rust_gpu_repo_root = spirv_std_package
-                .manifest_path // rust-gpu/crates/spirv-std/Cargo.toml
+            let manifest_path = spirv_std_package.manifest_path.as_path();
+            let Some(rust_gpu_repo_root) = manifest_path // rust-gpu/crates/spirv-std/Cargo.toml
                 .parent() // rust-gpu/crates/spirv-std
                 .and_then(Utf8Path::parent) // rust-gpu/crates
                 .and_then(Utf8Path::parent) // rust-gpu
-                .context("selecting rust-gpu workspace root dir in local path")?
-                .to_owned();
-            if !rust_gpu_repo_root.is_dir() {
-                anyhow::bail!("path {rust_gpu_repo_root} is not a directory");
-            }
+                .filter(|path| path.is_dir())
+                .map(ToOwned::to_owned)
+            else {
+                let err = ParseSourceVersionError::InvalidManifestPath(manifest_path.to_owned());
+                return Err(err);
+            };
             let version = spirv_std_package.version.clone();
             Self::Path {
                 rust_gpu_repo_root,
@@ -198,9 +210,160 @@ impl SpirvSource {
         };
 
         log::debug!("Parsed `rust-gpu` source and version: {result:?}");
-
         Ok(result)
     }
+}
+
+/// An error indicating that construction of [`SpirvSource`] failed.
+#[expect(clippy::module_name_repetitions, reason = "this is intended")]
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum SpirvSourceError {
+    /// Querying metadata failed.
+    #[error(transparent)]
+    QueryMetadata(#[from] QueryMetadataError),
+    /// The package was missing from the metadata.
+    #[error(transparent)]
+    MissingPackage(#[from] MissingPackageError),
+    /// Parsing the source and version of `spirv-std` crate from the package failed.
+    #[error(transparent)]
+    ParseSourceVersion(#[from] ParseSourceVersionError),
+    /// Parsed version of the crate is not valid.
+    #[error("invalid version: {0}")]
+    InvalidVersion(#[from] cargo_metadata::semver::Error),
+}
+
+/// An error indicating that parsing the source and version of `rust-gpu` from the package failed.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum ParseSourceVersionError {
+    /// The source was found to be ambiguous.
+    #[error("both git and crates.io were found at source {0}")]
+    AmbiguousSource(cargo_metadata::Source),
+    /// The source was found to be of git format but it is not valid.
+    #[error("invalid git format of source {0}")]
+    InvalidGitSource(cargo_metadata::Source),
+    /// The source has unknown / unsupported format.
+    #[error("unknown format of source {0}")]
+    UnknownSource(cargo_metadata::Source),
+    /// Manifest path of the package is not valid.
+    #[error("invalid manifest path {0}")]
+    InvalidManifestPath(Utf8PathBuf),
+}
+
+/// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
+///
+/// # Errors
+///
+/// Returns an error if the package is at the root of the filesystem,
+/// build script does not exist, or there is no definition of `channel` in it.
+#[inline]
+pub fn rust_gpu_toolchain_channel(
+    rustc_codegen_spirv: &Package,
+) -> Result<String, RustGpuToolchainChannelError> {
+    let path = rustc_codegen_spirv
+        .manifest_path
+        .parent()
+        .ok_or(RustGpuToolchainChannelError::ManifestAtRoot)?;
+    let build_script = path.join("build.rs");
+
+    log::debug!("Parsing `build.rs` at {build_script:?} for the used toolchain");
+    let contents = match fs::read_to_string(&build_script) {
+        Ok(contents) => contents,
+        Err(source) => {
+            let err = RustGpuToolchainChannelError::InvalidBuildScript {
+                source,
+                build_script,
+            };
+            return Err(err);
+        }
+    };
+
+    let channel_start = "channel = \"";
+    let Some(channel_line) = contents
+        .lines()
+        .find(|line| line.starts_with(channel_start))
+    else {
+        let err = RustGpuToolchainChannelError::ChannelStartNotFound {
+            channel_start: channel_start.to_owned(),
+            build_script,
+        };
+        return Err(err);
+    };
+    let start = channel_start.len();
+
+    let channel_end = "\"";
+    #[expect(clippy::string_slice, reason = "line starts with `channel_start`")]
+    let Some(end) = channel_line[start..]
+        .find(channel_end)
+        .map(|end| end + start)
+    else {
+        let err = RustGpuToolchainChannelError::ChannelEndNotFound {
+            channel_end: channel_end.to_owned(),
+            channel_line: channel_line.to_owned(),
+            build_script,
+        };
+        return Err(err);
+    };
+
+    let range = start..end;
+    let Some(channel) = channel_line.get(range.clone()) else {
+        let err = RustGpuToolchainChannelError::InvalidChannelSlice {
+            range,
+            channel_line: channel_line.to_owned(),
+            build_script,
+        };
+        return Err(err);
+    };
+    Ok(channel.to_owned())
+}
+
+/// An error indicating that getting the channel of a Rust toolchain from the package failed.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum RustGpuToolchainChannelError {
+    /// Manifest of the package is located at the root of the file system
+    /// and cannot have a parent.
+    #[error("package manifest was located at root")]
+    ManifestAtRoot,
+    /// Build script file is not valid or does not exist.
+    #[error("invalid build script {build_script}: {source}")]
+    InvalidBuildScript {
+        /// Source of the error.
+        source: io::Error,
+        /// Path to the build script file.
+        build_script: Utf8PathBuf,
+    },
+    /// There is no line starting with `channel_start`
+    /// in the build script file contents.
+    #[error("`{channel_start}` line in {build_script:?} not found")]
+    ChannelStartNotFound {
+        /// Start of the channel line.
+        channel_start: String,
+        /// Path to the build script file.
+        build_script: Utf8PathBuf,
+    },
+    /// Channel line does not contain `channel_end`
+    /// in the build script file contents.
+    #[error("ending `{channel_end}` of line \"{channel_line}\" in {build_script:?} not found")]
+    ChannelEndNotFound {
+        /// End of the channel line.
+        channel_end: String,
+        /// The line containing the channel information.
+        channel_line: String,
+        /// Path to the build script file.
+        build_script: Utf8PathBuf,
+    },
+    /// The range to slice the channel line is not valid.
+    #[error("cannot slice line \"{channel_line}\" of {build_script:?} by range {range:?}")]
+    InvalidChannelSlice {
+        /// The invalid range.
+        range: Range<usize>,
+        /// The line containing the channel information.
+        channel_line: String,
+        /// Path to the build script file.
+        build_script: Utf8PathBuf,
+    },
 }
 
 /// Returns a string suitable to use as a directory.
@@ -214,69 +377,6 @@ fn to_dirname(text: &str) -> String {
     .split(['{', '}', ' ', '\n', '"', '\''])
     .collect::<Vec<_>>()
     .concat()
-}
-
-/// get the Package metadata from some crate
-#[inline]
-pub fn query_metadata(crate_path: &Path) -> anyhow::Result<Metadata> {
-    log::debug!("Running `cargo metadata` on `{}`", crate_path.display());
-    let metadata = MetadataCommand::new()
-        .current_dir(
-            &crate_path
-                .canonicalize()
-                .context("could not get absolute path to shader crate")?,
-        )
-        .exec()?;
-    Ok(metadata)
-}
-
-/// implements [`Self::find_package`]
-pub trait FindPackage {
-    /// Search for a package or return a nice error
-    fn find_package(&self, crate_name: &str) -> anyhow::Result<&Package>;
-}
-
-impl FindPackage for Metadata {
-    #[inline]
-    fn find_package(&self, crate_name: &str) -> anyhow::Result<&Package> {
-        if let Some(package) = self
-            .packages
-            .iter()
-            .find(|package| package.name.as_str() == crate_name)
-        {
-            log::trace!("  found `{}` version `{}`", package.name, package.version);
-            Ok(package)
-        } else {
-            anyhow::bail!(
-                "`{crate_name}` not found in `Cargo.toml` at `{:?}`",
-                self.workspace_root
-            );
-        }
-    }
-}
-
-/// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
-#[inline]
-pub fn get_channel_from_rustc_codegen_spirv_build_script(
-    rustc_codegen_spirv_package: &Package,
-) -> anyhow::Result<String> {
-    let path = rustc_codegen_spirv_package
-        .manifest_path
-        .parent()
-        .context("finding `rustc_codegen_spirv` crate root")?;
-    let build_rs = path.join("build.rs");
-
-    log::debug!("Parsing `build.rs` at {build_rs:?} for the used toolchain");
-    let contents = fs::read_to_string(&build_rs)?;
-    let channel_start = "channel = \"";
-    let channel_line = contents
-        .lines()
-        .find_map(|line| line.strip_prefix(channel_start))
-        .context(format!("Can't find `{channel_start}` line in {build_rs:?}"))?;
-    let channel = channel_line
-        .get(..channel_line.find('"').context("ending \" missing")?)
-        .context("can't slice version")?;
-    Ok(channel.to_owned())
 }
 
 #[cfg(test)]

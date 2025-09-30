@@ -50,7 +50,10 @@
 //! conduct other post-processing, like converting the `spv` files into `wgsl` files,
 //! for example.
 
-use self::{build::Build, dump_usage::dump_full_usage_for_readme, show::Show};
+use self::{
+    build::Build, dump_usage::dump_full_usage_for_readme, show::Show,
+    user_consent::ask_for_user_consent,
+};
 
 mod build;
 mod config;
@@ -59,6 +62,7 @@ mod linkage;
 mod metadata;
 mod show;
 mod test;
+mod user_consent;
 
 pub use cargo_gpu_build::spirv_cache::backend::*;
 pub use spirv_builder;
@@ -99,7 +103,10 @@ impl Command {
                     "installing with final merged arguments: {:#?}",
                     command.install
                 );
-                command.install.run()?;
+
+                let skip_consent = command.install.params.auto_install_rust_toolchain;
+                let halt_installation = ask_for_user_consent(skip_consent);
+                command.install.run(std::io::stdout(), halt_installation)?;
             }
             Self::Build(build) => {
                 let shader_crate_path = &build.install.shader_crate;

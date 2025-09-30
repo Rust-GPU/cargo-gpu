@@ -1,147 +1,185 @@
-//! toolchain installation logic
+//! This module deals with an installation of Rust toolchain required by `rust-gpu`
+//! (and all of its [required components](REQUIRED_TOOLCHAIN_COMPONENTS)).
 
-use anyhow::Context as _;
-use crossterm::tty::IsTty as _;
+use std::process::{Command, Stdio};
 
-/// Use `rustup` to install the toolchain and components, if not already installed.
+use crate::command::{execute_command, CommandExecError};
+
+/// Allows to halt the installation process of toolchain or its [required components](REQUIRED_TOOLCHAIN_COMPONENTS).
+#[derive(Debug, Clone, Copy)]
+#[expect(clippy::exhaustive_structs, reason = "intended to be exhaustive")]
+pub struct HaltToolchainInstallation<T, C> {
+    /// Closure which is called to halt the installation process of toolchain.
+    pub on_toolchain_install: T,
+    /// Closure which is called to halt the installation process of required toolchain components.
+    pub on_components_install: C,
+}
+
+/// Type of [`HaltToolchainInstallation`] which does nothing.
+// FIXME: replace `fn` with `impl FnOnce` once it's stabilized
+pub type NoopHaltToolchainInstallation = HaltToolchainInstallation<
+    fn(&str) -> Result<(), CommandExecError>,
+    fn(&str) -> Result<(), CommandExecError>,
+>;
+
+impl NoopHaltToolchainInstallation {
+    /// Do not halt the installation process of toolchain or its [required components](REQUIRED_TOOLCHAIN_COMPONENTS).
+    ///
+    /// Calling either [`on_toolchain_install`] or [`on_components_install`]
+    /// returns [`Ok`] without any side effects.
+    ///
+    /// [`on_toolchain_install`]: HaltToolchainInstallation::on_toolchain_install
+    /// [`on_components_install`]: HaltToolchainInstallation::on_components_install
+    #[inline]
+    #[expect(clippy::must_use_candidate, reason = "contains no state")]
+    pub fn noop() -> Self {
+        Self {
+            on_toolchain_install: |_: &str| Ok(()),
+            on_components_install: |_: &str| Ok(()),
+        }
+    }
+}
+
+/// Uses `rustup` to install the toolchain and all the [required components](REQUIRED_TOOLCHAIN_COMPONENTS),
+/// if not already installed.
 ///
 /// Pretty much runs:
 ///
-/// * rustup toolchain add nightly-2024-04-24
-/// * rustup component add --toolchain nightly-2024-04-24 rust-src rustc-dev llvm-tools
+/// ```text
+/// rustup toolchain add nightly-2024-04-24
+/// rustup component add --toolchain nightly-2024-04-24 rust-src rustc-dev llvm-tools
+/// ```
+///
+/// where `nightly-2024-04-24` is an example of a toolchain
+/// provided as an argument to this function.
+///
+/// The second parameter allows you to halt the installation process
+/// of toolchain or its required components.
+///
+/// # Errors
+///
+/// Returns an error if any error occurs while using `rustup`
+/// or the installation process was halted.
 #[inline]
-pub fn ensure_toolchain_and_components_exist(
+pub fn ensure_toolchain_installation<E, T, C>(
     channel: &str,
-    skip_toolchain_install_consent: bool,
-) -> anyhow::Result<()> {
-    // Check for the required toolchain
-    let output_toolchain_list = std::process::Command::new("rustup")
-        .args(["toolchain", "list"])
-        .output()
-        .context("running rustup command")?;
-    anyhow::ensure!(
-        output_toolchain_list.status.success(),
-        "could not list installed toolchains"
-    );
-    let string_toolchain_list = String::from_utf8_lossy(&output_toolchain_list.stdout);
-    if string_toolchain_list
-        .split_whitespace()
-        .any(|toolchain| toolchain.starts_with(channel))
-    {
+    halt_installation: HaltToolchainInstallation<T, C>,
+) -> Result<(), E>
+where
+    E: From<CommandExecError>,
+    T: FnOnce(&str) -> Result<(), E>,
+    C: FnOnce(&str) -> Result<(), E>,
+{
+    let HaltToolchainInstallation {
+        on_toolchain_install,
+        on_components_install,
+    } = halt_installation;
+
+    if is_toolchain_installed(channel)? {
         log::debug!("toolchain {channel} is already installed");
     } else {
-        let message = format!("Rust {channel} with `rustup`");
-        get_consent_for_toolchain_install(
-            format!("Install {message}").as_ref(),
-            skip_toolchain_install_consent,
-        )?;
-        crate::user_output!(std::io::stdout(), "Installing {message}\n")?;
-
-        let output_toolchain_add = std::process::Command::new("rustup")
-            .args(["toolchain", "add"])
-            .arg(channel)
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .output()
-            .context("adding toolchain")?;
-        anyhow::ensure!(
-            output_toolchain_add.status.success(),
-            "could not install required toolchain"
-        );
+        log::debug!("toolchain {channel} is not installed yet");
+        on_toolchain_install(channel)?;
+        install_toolchain(channel)?;
     }
 
-    // Check for the required components
-    let output_component_list = std::process::Command::new("rustup")
-        .args(["component", "list", "--toolchain"])
-        .arg(channel)
-        .output()
-        .context("getting toolchain list")?;
-    anyhow::ensure!(
-        output_component_list.status.success(),
-        "could not list installed components"
-    );
-    let string_component_list = String::from_utf8_lossy(&output_component_list.stdout);
-    let required_components = ["rust-src", "rustc-dev", "llvm-tools"];
-    let installed_components = string_component_list.lines().collect::<Vec<_>>();
-    let all_components_installed = required_components.iter().all(|component| {
-        installed_components.iter().any(|installed_component| {
-            let is_component = installed_component.starts_with(component);
-            let is_installed = installed_component.ends_with("(installed)");
-            is_component && is_installed
-        })
-    });
-    if all_components_installed {
-        log::debug!("all required components are installed");
+    if all_required_toolchain_components_installed(channel)? {
+        log::debug!("all required components of toolchain {channel} are installed");
     } else {
-        let message = "toolchain components [rust-src, rustc-dev, llvm-tools] with `rustup`";
-        get_consent_for_toolchain_install(
-            format!("Install {message}").as_ref(),
-            skip_toolchain_install_consent,
-        )?;
-        crate::user_output!(std::io::stdout(), "Installing {message}\n")?;
-
-        let output_component_add = std::process::Command::new("rustup")
-            .args(["component", "add", "--toolchain"])
-            .arg(channel)
-            .args(["rust-src", "rustc-dev", "llvm-tools"])
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .output()
-            .context("adding rustup component")?;
-        anyhow::ensure!(
-            output_component_add.status.success(),
-            "could not install required components"
-        );
+        log::debug!("not all required components of toolchain {channel} are installed yet");
+        on_components_install(channel)?;
+        install_required_toolchain_components(channel)?;
     }
 
     Ok(())
 }
 
-/// Prompt user if they want to install a new Rust toolchain.
-fn get_consent_for_toolchain_install(
-    prompt: &str,
-    skip_toolchain_install_consent: bool,
-) -> anyhow::Result<()> {
-    if skip_toolchain_install_consent {
-        return Ok(());
-    }
+/// Checks if the given toolchain is installed using `rustup`.
+///
+/// # Errors
+///
+/// Returns an error if any error occurs while using `rustup`.
+#[inline]
+pub fn is_toolchain_installed(channel: &str) -> Result<bool, CommandExecError> {
+    let mut command = Command::new("rustup");
+    command.args(["toolchain", "list"]);
+    let output = execute_command(command)?;
 
-    if !std::io::stdout().is_tty() {
-        crate::user_output!(
-            std::io::stdout(),
-            "No TTY detected so can't ask for consent to install Rust toolchain."
-        )?;
-        log::error!("Attempted to ask for consent when there's no TTY");
-        #[expect(clippy::exit, reason = "can't ask for user consent if there's no TTY")]
-        std::process::exit(1);
-    }
+    let toolchain_list = String::from_utf8_lossy(&output.stdout);
+    let installed = toolchain_list
+        .split_whitespace()
+        .any(|toolchain| toolchain.starts_with(channel));
+    Ok(installed)
+}
 
-    log::debug!("asking for consent to install the required toolchain");
-    crossterm::terminal::enable_raw_mode().context("enabling raw mode")?;
-    crate::user_output!(std::io::stdout(), "{prompt} [y/n]: ")?;
-    let mut input = crossterm::event::read().context("reading crossterm event")?;
+/// Installs the given toolchain using `rustup`.
+///
+/// # Errors
+///
+/// Returns an error if any error occurs while using `rustup`.
+#[inline]
+#[expect(clippy::module_name_repetitions, reason = "this is intended")]
+pub fn install_toolchain(channel: &str) -> Result<(), CommandExecError> {
+    let mut command = Command::new("rustup");
+    command
+        .args(["toolchain", "add"])
+        .arg(channel)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    let _output = execute_command(command)?;
 
-    if let crossterm::event::Event::Key(crossterm::event::KeyEvent {
-        code: crossterm::event::KeyCode::Enter,
-        kind: crossterm::event::KeyEventKind::Release,
-        ..
-    }) = input
-    {
-        // In Powershell, programs will potentially observe the Enter key release after they started
-        // (see crossterm#124). If that happens, re-read the input.
-        input = crossterm::event::read().context("re-reading crossterm event")?;
-    }
-    crossterm::terminal::disable_raw_mode().context("disabling raw mode")?;
+    Ok(())
+}
 
-    if let crossterm::event::Event::Key(crossterm::event::KeyEvent {
-        code: crossterm::event::KeyCode::Char('y'),
-        ..
-    }) = input
-    {
-        Ok(())
-    } else {
-        crate::user_output!(std::io::stdout(), "Exiting...\n")?;
-        #[expect(clippy::exit, reason = "user requested abort")]
-        std::process::exit(0);
-    }
+/// Components which are required to be installed for a toolchain to be usable with `rust-gpu`.
+pub const REQUIRED_TOOLCHAIN_COMPONENTS: [&str; 3] = ["rust-src", "rustc-dev", "llvm-tools"];
+
+/// Checks if all the [required components](REQUIRED_TOOLCHAIN_COMPONENTS)
+/// of the given toolchain are installed using `rustup`.
+///
+/// # Errors
+///
+/// Returns an error if any error occurs while using `rustup`.
+#[inline]
+pub fn all_required_toolchain_components_installed(
+    channel: &str,
+) -> Result<bool, CommandExecError> {
+    let mut command = Command::new("rustup");
+    command
+        .args(["component", "list", "--toolchain"])
+        .arg(channel);
+    let output = execute_command(command)?;
+
+    let component_list = String::from_utf8_lossy(&output.stdout);
+    let component_list_lines = component_list.lines().collect::<Vec<_>>();
+    let installed = REQUIRED_TOOLCHAIN_COMPONENTS.iter().all(|component| {
+        component_list_lines
+            .iter()
+            .any(|maybe_installed_component| {
+                let is_component = maybe_installed_component.starts_with(component);
+                let is_installed = maybe_installed_component.ends_with("(installed)");
+                is_component && is_installed
+            })
+    });
+    Ok(installed)
+}
+
+/// Installs all the [required components](REQUIRED_TOOLCHAIN_COMPONENTS)
+/// for the given toolchain using `rustup`.
+///
+/// # Errors
+///
+/// Returns an error if any error occurs while using `rustup`.
+#[inline]
+pub fn install_required_toolchain_components(channel: &str) -> Result<(), CommandExecError> {
+    let mut command = Command::new("rustup");
+    command
+        .args(["component", "add", "--toolchain"])
+        .arg(channel)
+        .args(REQUIRED_TOOLCHAIN_COMPONENTS)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    let _output = execute_command(command)?;
+
+    Ok(())
 }

@@ -9,7 +9,7 @@ use anyhow::Context as _;
 use cargo_gpu_build::{lockfile::LockfileMismatchHandler, spirv_cache::user_output};
 use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
 
-use crate::{linkage::Linkage, Install};
+use crate::{linkage::Linkage, user_consent::ask_for_user_consent, Install};
 
 /// Args for just a build
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -59,12 +59,14 @@ pub struct Build {
 impl Build {
     /// Entrypoint
     pub fn run(&mut self) -> anyhow::Result<()> {
-        let installed_backend = self.install.run()?;
+        let skip_consent = self.install.params.auto_install_rust_toolchain;
+        let halt_installation = ask_for_user_consent(skip_consent);
+        let installed_backend = self.install.run(std::io::stdout(), halt_installation)?;
 
         let _lockfile_mismatch_handler = LockfileMismatchHandler::new(
             &self.install.shader_crate,
             &installed_backend.toolchain_channel,
-            self.install.force_overwrite_lockfiles_v4_to_v3,
+            self.install.params.force_overwrite_lockfiles_v4_to_v3,
         )?;
 
         let builder = &mut self.build.spirv_builder;
