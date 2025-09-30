@@ -1,15 +1,19 @@
 //! Handles lockfile version conflicts and downgrades.
 //!
-//! Stable uses lockfile v4, but rust-gpu v0.9.0 uses an old toolchain requiring v3
-//! and will refuse to build with a v4 lockfile being present.
+//! Stable uses lockfile v4, but `rust-gpu` v0.9.0 uses an old toolchain requiring v3
+//! and will refuse to build shader crate with a v4 lockfile being present.
 //! This module takes care of warning the user and potentially downgrading the lockfile.
 
-use std::io::Write as _;
+#![expect(clippy::non_ascii_literal, reason = "'⚠️' character is really needed")]
 
-use anyhow::Context as _;
+use std::{
+    fs,
+    io::{self, Write as _},
+    path::{Path, PathBuf},
+};
+
+use rustc_codegen_spirv_cache::spirv_builder::query_rustc_version;
 use semver::Version;
-
-use crate::{spirv_builder::query_rustc_version, spirv_cache::user_output};
 
 /// `Cargo.lock` manifest version 4 became the default in Rust 1.83.0. Conflicting manifest
 /// versions between the workspace and the shader crate, can cause problems.
@@ -17,41 +21,44 @@ const RUST_VERSION_THAT_USES_V4_CARGO_LOCKS: Version = Version::new(1, 83, 0);
 
 /// Cargo dependency for `spirv-builder` and the rust toolchain channel.
 #[derive(Debug, Clone)]
-#[expect(clippy::module_name_repetitions, reason = "such naming is intentional")]
 #[non_exhaustive]
+#[expect(clippy::module_name_repetitions, reason = "it is intended")]
 pub struct LockfileMismatchHandler {
     /// `Cargo.lock`s that have had their manifest versions changed by us and need changing back.
-    pub cargo_lock_files_with_changed_manifest_versions: Vec<std::path::PathBuf>,
+    pub cargo_lock_files_with_changed_manifest_versions: Vec<PathBuf>,
 }
 
 impl LockfileMismatchHandler {
-    /// Create instance
+    /// Creates self from the given parameters.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there was a problem checking or changing lockfile manifest versions.
+    /// See [`LockfileMismatchError`] for details.
     #[inline]
     pub fn new(
-        shader_crate_path: &std::path::Path,
+        shader_crate_path: &Path,
         toolchain_channel: &str,
         is_force_overwrite_lockfiles_v4_to_v3: bool,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, LockfileMismatchError> {
         let mut cargo_lock_files_with_changed_manifest_versions = vec![];
 
         let maybe_shader_crate_lock =
-            Self::ensure_workspace_rust_version_doesnt_conflict_with_shader(
+            Self::ensure_workspace_rust_version_does_not_conflict_with_shader(
                 shader_crate_path,
                 is_force_overwrite_lockfiles_v4_to_v3,
-            )
-            .context("ensure_workspace_rust_version_doesnt_conflict_with_shader")?;
+            )?;
 
         if let Some(shader_crate_lock) = maybe_shader_crate_lock {
             cargo_lock_files_with_changed_manifest_versions.push(shader_crate_lock);
         }
 
         let maybe_workspace_crate_lock =
-            Self::ensure_shader_rust_version_doesnt_conflict_with_any_cargo_locks(
+            Self::ensure_shader_rust_version_does_not_conflict_with_any_cargo_locks(
                 shader_crate_path,
                 toolchain_channel,
                 is_force_overwrite_lockfiles_v4_to_v3,
-            )
-            .context("ensure_shader_rust_version_doesnt_conflict_with_any_cargo_locks")?;
+            )?;
 
         if let Some(workspace_crate_lock) = maybe_workspace_crate_lock {
             cargo_lock_files_with_changed_manifest_versions.push(workspace_crate_lock);
@@ -62,13 +69,15 @@ impl LockfileMismatchHandler {
         })
     }
 
-    /// See docs for `force_overwrite_lockfiles_v4_to_v3` flag for why we do this.
-    fn ensure_workspace_rust_version_doesnt_conflict_with_shader(
-        shader_crate_path: &std::path::Path,
+    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](crate::cache::install::InstallParams::force_overwrite_lockfiles_v4_to_v3)
+    /// flag for why we do this.
+    fn ensure_workspace_rust_version_does_not_conflict_with_shader(
+        shader_crate_path: &Path,
         is_force_overwrite_lockfiles_v4_to_v3: bool,
-    ) -> anyhow::Result<Option<std::path::PathBuf>> {
+    ) -> Result<Option<PathBuf>, LockfileMismatchError> {
         log::debug!("Ensuring no v3/v4 `Cargo.lock` conflicts from workspace Rust...");
-        let workspace_rust_version = query_rustc_version(None).context("reading rustc version")?;
+        let workspace_rust_version =
+            query_rustc_version(None).map_err(LockfileMismatchError::QueryRustcVersion)?;
         if workspace_rust_version >= RUST_VERSION_THAT_USES_V4_CARGO_LOCKS {
             log::debug!(
                 "user's Rust is v{workspace_rust_version}, so no v3/v4 conflicts possible."
@@ -79,8 +88,7 @@ impl LockfileMismatchHandler {
         Self::handle_conflicting_cargo_lock_v4(
             shader_crate_path,
             is_force_overwrite_lockfiles_v4_to_v3,
-        )
-        .context("handling v4/v3 conflict")?;
+        )?;
 
         if is_force_overwrite_lockfiles_v4_to_v3 {
             Ok(Some(shader_crate_path.join("Cargo.lock")))
@@ -89,15 +97,16 @@ impl LockfileMismatchHandler {
         }
     }
 
-    /// See docs for `force_overwrite_lockfiles_v4_to_v3` flag for why we do this.
-    fn ensure_shader_rust_version_doesnt_conflict_with_any_cargo_locks(
-        shader_crate_path: &std::path::Path,
+    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](crate::cache::install::InstallParams::force_overwrite_lockfiles_v4_to_v3)
+    /// flag for why we do this.
+    fn ensure_shader_rust_version_does_not_conflict_with_any_cargo_locks(
+        shader_crate_path: &Path,
         channel: &str,
         is_force_overwrite_lockfiles_v4_to_v3: bool,
-    ) -> anyhow::Result<Option<std::path::PathBuf>> {
+    ) -> Result<Option<PathBuf>, LockfileMismatchError> {
         log::debug!("Ensuring no v3/v4 `Cargo.lock` conflicts from shader's Rust...");
         let shader_rust_version =
-            query_rustc_version(Some(channel)).context("getting rustc version")?;
+            query_rustc_version(Some(channel)).map_err(LockfileMismatchError::QueryRustcVersion)?;
         if shader_rust_version >= RUST_VERSION_THAT_USES_V4_CARGO_LOCKS {
             log::debug!("shader's Rust is v{shader_rust_version}, so no v3/v4 conflicts possible.");
             return Ok(None);
@@ -115,18 +124,14 @@ impl LockfileMismatchHandler {
             Self::handle_conflicting_cargo_lock_v4(
                 shader_crate_path,
                 is_force_overwrite_lockfiles_v4_to_v3,
-            )
-            .context("handling v4/v3 conflict")?;
+            )?;
         }
 
-        if let Some(workspace_root) =
-            Self::get_workspace_root(shader_crate_path).context("reading workspace root")?
-        {
+        if let Some(workspace_root) = Self::get_workspace_root(shader_crate_path)? {
             Self::handle_conflicting_cargo_lock_v4(
                 workspace_root,
                 is_force_overwrite_lockfiles_v4_to_v3,
-            )
-            .context("handling conflicting cargo v4")?;
+            )?;
             return Ok(Some(workspace_root.join("Cargo.lock")));
         }
 
@@ -137,10 +142,16 @@ impl LockfileMismatchHandler {
     /// `cargo metadata` because if the workspace has a conflicting `Cargo.lock` manifest version
     /// then that command won't work. Instead we do an old school recursive file tree walk.
     fn get_workspace_root(
-        shader_crate_path: &std::path::Path,
-    ) -> anyhow::Result<Option<&std::path::Path>> {
-        let shader_cargo_toml = std::fs::read_to_string(shader_crate_path.join("Cargo.toml"))
-            .with_context(|| format!("reading Cargo.toml at {}", shader_crate_path.display()))?;
+        shader_crate_path: &Path,
+    ) -> Result<Option<&Path>, LockfileMismatchError> {
+        let shader_cargo_toml_path = shader_crate_path.join("Cargo.toml");
+        let shader_cargo_toml = match fs::read_to_string(shader_cargo_toml_path) {
+            Ok(contents) => contents,
+            Err(source) => {
+                let file = shader_crate_path.join("Cargo.toml");
+                return Err(LockfileMismatchError::ReadFile { file, source });
+            }
+        };
         if !shader_cargo_toml.contains("workspace = true") {
             return Ok(None);
         }
@@ -164,111 +175,105 @@ impl LockfileMismatchHandler {
     /// When Rust < 1.83.0 is being used an error will occur if it tries to parse `Cargo.lock`
     /// files that use lockfile manifest version 4. Here we check and handle that.
     fn handle_conflicting_cargo_lock_v4(
-        folder: &std::path::Path,
+        folder: &Path,
         is_force_overwrite_lockfiles_v4_to_v3: bool,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), LockfileMismatchError> {
         let shader_cargo_lock_path = folder.join("Cargo.lock");
-        let shader_cargo_lock = std::fs::read_to_string(shader_cargo_lock_path.clone())
-            .context("reading shader cargo lock")?;
-        let third_line = shader_cargo_lock.lines().nth(2).context("no third line")?;
+        let shader_cargo_lock = match fs::read_to_string(&shader_cargo_lock_path) {
+            Ok(contents) => contents,
+            Err(source) => {
+                let file = shader_cargo_lock_path;
+                return Err(LockfileMismatchError::ReadFile { file, source });
+            }
+        };
+
+        let Some(third_line) = shader_cargo_lock.lines().nth(2) else {
+            let file = shader_cargo_lock_path;
+            return Err(LockfileMismatchError::TooFewLinesInLockfile { file });
+        };
         if third_line.contains("version = 4") {
             Self::handle_v3v4_conflict(
                 &shader_cargo_lock_path,
                 is_force_overwrite_lockfiles_v4_to_v3,
-            )
-            .context("handling v4/v3 conflict")?;
+            )?;
             return Ok(());
         }
         if third_line.contains("version = 3") {
             return Ok(());
         }
-        anyhow::bail!(
-            "Unrecognized `Cargo.lock` manifest version at: {}",
-            folder.display()
-        )
+
+        let file = shader_cargo_lock_path;
+        let version_line = third_line.to_owned();
+        Err(LockfileMismatchError::UnrecognizedLockfileVersion { file, version_line })
     }
 
     /// Handle conflicting `Cargo.lock` manifest versions by either overwriting the manifest
     /// version or exiting with advice on how to handle the conflict.
     fn handle_v3v4_conflict(
-        offending_cargo_lock: &std::path::Path,
+        offending_cargo_lock: &Path,
         is_force_overwrite_lockfiles_v4_to_v3: bool,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), LockfileMismatchError> {
         if !is_force_overwrite_lockfiles_v4_to_v3 {
-            Self::exit_with_v3v4_hack_suggestion()?;
+            return Err(LockfileMismatchError::ConflictingVersions);
         }
 
         Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "4", "3")
-            .context("replacing version 4 -> 3")?;
-
-        Ok(())
     }
 
-    /// Once all install and builds have completed put their manifest versions back
-    /// to how they were.
+    /// Once all install and builds have completed put their manifest versions
+    /// back to how they were.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there was a problem reverting any of the lockfiles.
+    /// See [`LockfileMismatchError`] for details.
     #[inline]
-    pub fn revert_cargo_lock_manifest_versions(&mut self) -> anyhow::Result<()> {
+    pub fn revert_cargo_lock_manifest_versions(&mut self) -> Result<(), LockfileMismatchError> {
         for offending_cargo_lock in &self.cargo_lock_files_with_changed_manifest_versions {
             log::debug!("Reverting: {}", offending_cargo_lock.display());
-            Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "3", "4")
-                .context("replacing version 3 -> 4")?;
+            Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "3", "4")?;
         }
-
         Ok(())
     }
 
     /// Replace the manifest version, eg `version = 4`, in a `Cargo.lock` file.
     fn replace_cargo_lock_manifest_version(
-        offending_cargo_lock: &std::path::Path,
+        offending_cargo_lock: &Path,
         from_version: &str,
         to_version: &str,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), LockfileMismatchError> {
         log::warn!(
-            "Replacing manifest version 'version = {}' with 'version = {}' in: {}",
-            from_version,
-            to_version,
+            "Replacing manifest version 'version = {from_version}' with 'version = {to_version}' in: {}",
             offending_cargo_lock.display()
         );
-        let old_contents = std::fs::read_to_string(offending_cargo_lock)
-            .context("reading offending Cargo.lock")?;
+        let old_contents = match fs::read_to_string(offending_cargo_lock) {
+            Ok(contents) => contents,
+            Err(source) => {
+                let file = offending_cargo_lock.to_path_buf();
+                return Err(LockfileMismatchError::ReadFile { file, source });
+            }
+        };
         let new_contents = old_contents.replace(
             &format!("\nversion = {from_version}\n"),
             &format!("\nversion = {to_version}\n"),
         );
 
-        let mut file = std::fs::OpenOptions::new()
+        if let Err(source) = fs::OpenOptions::new()
             .write(true)
             .truncate(true)
             .open(offending_cargo_lock)
-            .context("opening offending Cargo.lock")?;
-        file.write_all(new_contents.as_bytes())?;
+            .and_then(|mut file| file.write_all(new_contents.as_bytes()))
+        {
+            let err = LockfileMismatchError::RewriteLockfile {
+                file: offending_cargo_lock.to_path_buf(),
+                from_version: from_version.to_owned(),
+                to_version: to_version.to_owned(),
+                source,
+            };
+            return Err(err);
+        }
 
         Ok(())
-    }
-
-    /// Exit and give the user advice on how to deal with the infamous v3/v4 Cargo lockfile version
-    /// problem.
-    fn exit_with_v3v4_hack_suggestion() -> anyhow::Result<()> {
-        user_output!(
-            std::io::stdout(),
-            "Conflicting `Cargo.lock` versions detected ⚠️\n\
-            Because `cargo gpu` uses a dedicated Rust toolchain for compiling shaders\n\
-            it's possible that the `Cargo.lock` manifest version of the shader crate\n\
-            does not match the `Cargo.lock` manifest version of the workspace. This is\n\
-            due to a change in the defaults introduced in Rust 1.83.0.\n\
-            \n\
-            One way to resolve this is to force the workspace to use the same version\n\
-            of Rust as required by the shader. However that is not often ideal or even\n\
-            possible. Another way is to exlude the shader from the workspace. This is\n\
-            also not ideal if you have many shaders sharing config from the workspace.\n\
-            \n\
-            Therefore `cargo gpu build/install` offers a workaround with the argument:\n\
-              --force-overwrite-lockfiles-v4-to-v3\n\
-            \n\
-            See `cargo gpu build --help` for more information.\n\
-            "
-        )?;
-        std::process::exit(1);
     }
 }
 
@@ -277,7 +282,79 @@ impl Drop for LockfileMismatchHandler {
     fn drop(&mut self) {
         let result = self.revert_cargo_lock_manifest_versions();
         if let Err(error) = result {
-            log::error!("Couldn't revert some or all of the shader `Cargo.lock` files: {error}");
+            log::error!("could not revert some or all of the shader `Cargo.lock` files ({error})");
         }
     }
+}
+
+/// An error indicating a problem occurred
+/// while handling lockfile manifest version mismatches.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+#[expect(clippy::module_name_repetitions, reason = "it is intended")]
+pub enum LockfileMismatchError {
+    /// Could not query current rustc version.
+    #[error("could not query rustc version: {0}")]
+    QueryRustcVersion(#[source] io::Error),
+    /// Could not read contents of the file.
+    #[error("could not read file {file}: {source}")]
+    ReadFile {
+        /// Path to the file that couldn't be read.
+        file: PathBuf,
+        /// Source of the error.
+        source: io::Error,
+    },
+    /// Could not rewrite the lockfile with new manifest version.
+    #[error(
+        "could not rewrite lockfile {file} from version {from_version} to {to_version}: {source}"
+    )]
+    RewriteLockfile {
+        /// Path to the file that couldn't be rewritten.
+        file: PathBuf,
+        /// Old manifest version we were changing from.
+        from_version: String,
+        /// New manifest version we were changing to.
+        to_version: String,
+        /// Source of the error.
+        source: io::Error,
+    },
+    /// Lockfile has too few lines to determine manifest version.
+    #[error("lockfile at {file} has too few lines to determine manifest version")]
+    TooFewLinesInLockfile {
+        /// Path to the lockfile that contains too few lines.
+        file: PathBuf,
+    },
+    /// Lockfile manifest version could not be recognized.
+    #[error("unrecognized lockfile {file} manifest version at \"{version_line}\"")]
+    UnrecognizedLockfileVersion {
+        /// Path to the lockfile that contains the unrecognized version line.
+        file: PathBuf,
+        /// The unrecognized version line.
+        version_line: String,
+    },
+    /// Conflicting lockfile manifest versions detected, with advice on how to resolve them
+    /// by setting the [`force_overwrite_lockfiles_v4_to_v3`] flag.
+    ///
+    /// [`force_overwrite_lockfiles_v4_to_v3`]: crate::spirv_cache::backend::InstallParams::force_overwrite_lockfiles_v4_to_v3
+    #[error(
+        r#"conflicting `Cargo.lock` versions detected ⚠️
+
+Because a dedicated Rust toolchain for compiling shaders is being used,
+it's possible that the `Cargo.lock` manifest version of the shader crate
+does not match the `Cargo.lock` manifest version of the workspace.
+This is due to a change in the defaults introduced in Rust 1.83.0.
+
+One way to resolve this is to force the workspace to use the same version
+of Rust as required by the shader. However, that is not often ideal or even
+possible. Another way is to exclude the shader from the workspace. This is
+also not ideal if you have many shaders sharing config from the workspace.
+
+Therefore, `cargo gpu build/install` offers a workaround with the argument:
+  --force-overwrite-lockfiles-v4-to-v3
+
+which corresponds to the `force_overwrite_lockfiles_v4_to_v3` flag of `InstallParams`.
+
+See `cargo gpu build --help` or flag docs for more information."#
+    )]
+    ConflictingVersions,
 }

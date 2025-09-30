@@ -10,7 +10,7 @@ license.workspace = true
 [dependencies]
 rustc_codegen_spirv-cache = { path = "../rustc_codegen_spirv-cache" }
 spirv-builder.workspace = true
-anyhow.workspace = true
+thiserror.workspace = true
 semver.workspace = true
 log.workspace = true
 

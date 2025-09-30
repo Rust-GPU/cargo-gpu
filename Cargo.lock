@@ -123,11 +123,11 @@ dependencies = [
 name = "cargo-gpu-build"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "log",
  "rustc_codegen_spirv-cache",
  "semver",
  "spirv-builder",
+ "thiserror",
 ]
 
 [[package]]

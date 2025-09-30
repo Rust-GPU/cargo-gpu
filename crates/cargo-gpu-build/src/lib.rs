@@ -12,7 +12,6 @@
 //! to pass the many additional parameters required to configure rustc and our codegen backend,
 //! but provide you with a toolchain-agnostic version that you may use from stable rustc.
 
-#![expect(clippy::missing_errors_doc, reason = "temporary allow this")] // TODO: remove this & fix documentation
 #![expect(clippy::pub_use, reason = "part of public API")]
 
 pub use rustc_codegen_spirv_cache as spirv_cache;
