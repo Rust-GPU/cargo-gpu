@@ -11,17 +11,19 @@ license.workspace = true
 spirv-builder.workspace = true
 legacy_target_specs.workspace = true
 thiserror.workspace = true
-anyhow.workspace = true
-log.workspace = true
 directories.workspace = true
 cargo_metadata.workspace = true
-crossterm.workspace = true
-clap.workspace = true
+log.workspace = true
 serde.workspace = true
+clap = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-log.workspace = true
 cargo-util-schemas.workspace = true
+
+[features]
+# Enables `clap` support for public structs
+clap = ["dep:clap", "spirv-builder/clap"]
 
 [lints]
 workspace = true

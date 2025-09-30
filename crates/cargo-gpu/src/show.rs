@@ -4,8 +4,7 @@ use std::{fs, path::Path};
 
 use anyhow::bail;
 use cargo_gpu_build::spirv_cache::{
-    cache::cache_dir,
-    spirv_source::{query_metadata, SpirvSource},
+    cache::cache_dir, metadata::query_metadata, spirv_source::SpirvSource,
     target_specs::update_target_specs_files,
 };
 

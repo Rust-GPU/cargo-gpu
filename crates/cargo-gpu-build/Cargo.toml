@@ -9,9 +9,16 @@ license.workspace = true
 
 [dependencies]
 rustc_codegen_spirv-cache = { path = "../rustc_codegen_spirv-cache" }
+spirv-builder.workspace = true
 anyhow.workspace = true
 semver.workspace = true
 log.workspace = true
+
+[features]
+# Rebuilds target shader crate upon changes
+watch = ["spirv-builder/watch"]
+# Enables `clap` support for public structs
+clap = ["spirv-builder/clap", "rustc_codegen_spirv-cache/clap"]
 
 [lints]
 workspace = true

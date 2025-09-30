@@ -1,0 +1,7 @@
+[package]
+name = "rustc_codegen_spirv_dummy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.spirv-builder]
+package = "rustc_codegen_spirv"
