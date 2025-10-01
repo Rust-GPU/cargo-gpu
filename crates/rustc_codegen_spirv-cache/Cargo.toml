@@ -24,6 +24,8 @@ cargo-util-schemas.workspace = true
 [features]
 # Enables `clap` support for public structs
 clap = ["dep:clap", "spirv-builder/clap"]
+# Enables `watch` feature for `spirv-builder`
+watch = ["spirv-builder/watch"]
 
 [lints]
 workspace = true

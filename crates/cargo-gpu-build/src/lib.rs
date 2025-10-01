@@ -12,9 +12,10 @@
 //! to pass the many additional parameters required to configure rustc and our codegen backend,
 //! but provide you with a toolchain-agnostic version that you may use from stable rustc.
 
-#![expect(clippy::pub_use, reason = "part of public API")]
+#![expect(clippy::pub_use, reason = "pub use for build scripts")]
 
 pub use rustc_codegen_spirv_cache as spirv_cache;
 pub use rustc_codegen_spirv_cache::spirv_builder;
 
+pub mod build;
 pub mod lockfile;

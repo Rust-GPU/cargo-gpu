@@ -1,6 +1,11 @@
 //! This module deals with an installation of Rust toolchain required by `rust-gpu`
 //! (and all of its [required components](REQUIRED_TOOLCHAIN_COMPONENTS)).
 
+#![allow(
+    clippy::multiple_inherent_impl,
+    reason = "should be separate, see FIXME of type aliases below"
+)]
+
 use std::process::{Command, Stdio};
 
 use crate::command::{execute_command, CommandExecError};
@@ -15,12 +20,17 @@ pub struct HaltToolchainInstallation<T, C> {
     pub on_components_install: C,
 }
 
+/// Type of [`on_toolchain_install`](HaltToolchainInstallation::on_toolchain_install) which does nothing.
+// FIXME: replace with `impl FnOnce` once it's stabilized
+pub type NoopOnToolchainInstall = fn(&str) -> Result<(), CommandExecError>;
+
+/// Type of [`on_components_install`](HaltToolchainInstallation::on_components_install) which does nothing.
+// FIXME: replace with `impl FnOnce` once it's stabilized
+pub type NoopOnComponentsInstall = fn(&str) -> Result<(), CommandExecError>;
+
 /// Type of [`HaltToolchainInstallation`] which does nothing.
-// FIXME: replace `fn` with `impl FnOnce` once it's stabilized
-pub type NoopHaltToolchainInstallation = HaltToolchainInstallation<
-    fn(&str) -> Result<(), CommandExecError>,
-    fn(&str) -> Result<(), CommandExecError>,
->;
+pub type NoopHaltToolchainInstallation =
+    HaltToolchainInstallation<NoopOnToolchainInstall, NoopOnComponentsInstall>;
 
 impl NoopHaltToolchainInstallation {
     /// Do not halt the installation process of toolchain or its [required components](REQUIRED_TOOLCHAIN_COMPONENTS).
@@ -36,6 +46,66 @@ impl NoopHaltToolchainInstallation {
         Self {
             on_toolchain_install: |_: &str| Ok(()),
             on_components_install: |_: &str| Ok(()),
+        }
+    }
+}
+
+/// Configuration for `stdout` and `stderr` of commands executed by this [module](self).
+#[derive(Debug, Clone, Copy)]
+#[expect(clippy::exhaustive_structs, reason = "intended to be exhaustive")]
+pub struct StdioCfg<O, E> {
+    /// Configuration for [`Command::stdout()`].
+    pub stdout: O,
+    /// Configuration for [`Command::stderr()`].
+    pub stderr: E,
+}
+
+/// Type of [`stdout`](StdioCfg::stdout) which returns [`Stdio::null()`].
+// FIXME: replace with `impl FnOnce` once it's stabilized
+pub type NullStdout = fn() -> Stdio;
+
+/// Type of [`stderr`](StdioCfg::stderr) which returns [`Stdio::null()`].
+// FIXME: replace with `impl FnOnce` once it's stabilized
+pub type NullStderr = fn() -> Stdio;
+
+/// Type of [`StdioCfg`] which uses [`Stdio::null()`]
+/// for both [`stdout`](StdioCfg::stdout) and [`stderr`](StdioCfg::stderr).
+pub type NullStdioCfg = StdioCfg<NullStdout, NullStderr>;
+
+impl NullStdioCfg {
+    /// Configures both [`stdout`](StdioCfg::stdout) and [`stderr`](StdioCfg::stderr)
+    /// to use [`Stdio::null()`].
+    #[inline]
+    #[expect(clippy::must_use_candidate, reason = "contains no state")]
+    pub fn null() -> Self {
+        Self {
+            stdout: Stdio::null,
+            stderr: Stdio::null,
+        }
+    }
+}
+
+/// Type of [`stdout`](StdioCfg::stdout) which returns [`Stdio::inherit()`].
+// FIXME: replace with `impl FnOnce` once it's stabilized
+pub type InheritStdout = fn() -> Stdio;
+
+/// Type of [`stderr`](StdioCfg::stderr) which returns [`Stdio::inherit()`].
+// FIXME: replace with `impl FnOnce` once it's stabilized
+pub type InheritStderr = fn() -> Stdio;
+
+/// Type of [`StdioCfg`] which uses [`Stdio::inherit()`]
+/// for both [`stdout`](StdioCfg::stdout) and [`stderr`](StdioCfg::stderr).
+pub type InheritStdoutCfg = StdioCfg<InheritStdout, InheritStderr>;
+
+impl InheritStdoutCfg {
+    /// Configures both [`stdout`](StdioCfg::stdout) and [`stderr`](StdioCfg::stderr)
+    /// to use [`Stdio::inherit()`].
+    #[inline]
+    #[expect(clippy::must_use_candidate, reason = "contains no state")]
+    pub fn inherit() -> Self {
+        Self {
+            stdout: Stdio::inherit,
+            stderr: Stdio::inherit,
         }
     }
 }
@@ -61,26 +131,33 @@ impl NoopHaltToolchainInstallation {
 /// Returns an error if any error occurs while using `rustup`
 /// or the installation process was halted.
 #[inline]
-pub fn ensure_toolchain_installation<E, T, C>(
+pub fn ensure_toolchain_installation<R, T, C, O, E>(
     channel: &str,
-    halt_installation: HaltToolchainInstallation<T, C>,
-) -> Result<(), E>
+    halt: HaltToolchainInstallation<T, C>,
+    cfg: StdioCfg<O, E>,
+) -> Result<(), R>
 where
-    E: From<CommandExecError>,
-    T: FnOnce(&str) -> Result<(), E>,
-    C: FnOnce(&str) -> Result<(), E>,
+    R: From<CommandExecError>,
+    T: FnOnce(&str) -> Result<(), R>,
+    C: FnOnce(&str) -> Result<(), R>,
+    O: FnMut() -> Stdio,
+    E: FnMut() -> Stdio,
 {
     let HaltToolchainInstallation {
         on_toolchain_install,
         on_components_install,
-    } = halt_installation;
+    } = halt;
+    let StdioCfg {
+        mut stdout,
+        mut stderr,
+    } = cfg;
 
     if is_toolchain_installed(channel)? {
         log::debug!("toolchain {channel} is already installed");
     } else {
         log::debug!("toolchain {channel} is not installed yet");
         on_toolchain_install(channel)?;
-        install_toolchain(channel)?;
+        install_toolchain(channel, stdout(), stderr())?;
     }
 
     if all_required_toolchain_components_installed(channel)? {
@@ -88,7 +165,7 @@ where
     } else {
         log::debug!("not all required components of toolchain {channel} are installed yet");
         on_components_install(channel)?;
-        install_required_toolchain_components(channel)?;
+        install_required_toolchain_components(channel, stdout(), stderr())?;
     }
 
     Ok(())
@@ -119,13 +196,21 @@ pub fn is_toolchain_installed(channel: &str) -> Result<bool, CommandExecError> {
 /// Returns an error if any error occurs while using `rustup`.
 #[inline]
 #[expect(clippy::module_name_repetitions, reason = "this is intended")]
-pub fn install_toolchain(channel: &str) -> Result<(), CommandExecError> {
+pub fn install_toolchain<O, E>(
+    channel: &str,
+    stdout_cfg: O,
+    stderr_cfg: E,
+) -> Result<(), CommandExecError>
+where
+    O: Into<Stdio>,
+    E: Into<Stdio>,
+{
     let mut command = Command::new("rustup");
     command
         .args(["toolchain", "add"])
         .arg(channel)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
+        .stdout(stdout_cfg)
+        .stderr(stderr_cfg);
     let _output = execute_command(command)?;
 
     Ok(())
@@ -171,14 +256,22 @@ pub fn all_required_toolchain_components_installed(
 ///
 /// Returns an error if any error occurs while using `rustup`.
 #[inline]
-pub fn install_required_toolchain_components(channel: &str) -> Result<(), CommandExecError> {
+pub fn install_required_toolchain_components<O, E>(
+    channel: &str,
+    stdout_cfg: O,
+    stderr_cfg: E,
+) -> Result<(), CommandExecError>
+where
+    O: Into<Stdio>,
+    E: Into<Stdio>,
+{
     let mut command = Command::new("rustup");
     command
         .args(["component", "add", "--toolchain"])
         .arg(channel)
         .args(REQUIRED_TOOLCHAIN_COMPONENTS)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
+        .stdout(stdout_cfg)
+        .stderr(stderr_cfg);
     let _output = execute_command(command)?;
 
     Ok(())

@@ -29,7 +29,10 @@ use crate::{
         rust_gpu_toolchain_channel, RustGpuToolchainChannelError, SpirvSource, SpirvSourceError,
     },
     target_specs::{update_target_specs_files, UpdateTargetSpecsFilesError},
-    toolchain::{ensure_toolchain_installation, HaltToolchainInstallation},
+    toolchain::{
+        ensure_toolchain_installation, HaltToolchainInstallation, NoopOnComponentsInstall,
+        NoopOnToolchainInstall, NullStderr, NullStdout, StdioCfg,
+    },
     user_output,
 };
 
@@ -266,16 +269,17 @@ impl Install {
     /// Returns an error if the installation somehow fails.
     /// See [`InstallError`] for further details.
     #[inline]
-    pub fn run<E, T, C, W>(
+    pub fn run<R, W, T, C, O, E>(
         &self,
-        writer: W,
-        halt_toolchain_installation: HaltToolchainInstallation<T, C>,
-    ) -> Result<InstalledBackend, InstallError<E>>
+        params: InstallRunParams<W, T, C, O, E>,
+    ) -> Result<InstalledBackend, InstallError<R>>
     where
         W: io::Write,
-        E: From<CommandExecError>,
-        T: FnOnce(&str) -> Result<(), E>,
-        C: FnOnce(&str) -> Result<(), E>,
+        R: From<CommandExecError>,
+        T: FnOnce(&str) -> Result<(), R>,
+        C: FnOnce(&str) -> Result<(), R>,
+        O: FnMut() -> Stdio,
+        E: FnMut() -> Stdio,
     {
         // Ensure the cache dir exists
         let cache_dir = cache_dir()?;
@@ -291,12 +295,7 @@ impl Install {
         )?;
         let install_dir = source.install_dir()?;
 
-        let dylib_filename = format!(
-            "{}rustc_codegen_spirv{}",
-            std::env::consts::DLL_PREFIX,
-            std::env::consts::DLL_SUFFIX
-        );
-
+        let dylib_filename = dylib_filename("rustc_codegen_spirv");
         let (dest_dylib_path, skip_rebuild) = if source.is_path() {
             (
                 install_dir
@@ -337,7 +336,7 @@ impl Install {
         let target_spec_dir = update_target_specs_files(&source, &dummy_metadata, !skip_rebuild)?;
 
         log::debug!("ensure_toolchain_and_components_exist");
-        ensure_toolchain_installation(&toolchain_channel, halt_toolchain_installation)
+        ensure_toolchain_installation(&toolchain_channel, params.halt, params.stdio_cfg)
             .map_err(InstallError::EnsureToolchainInstallation)?;
 
         if !skip_rebuild {
@@ -348,8 +347,11 @@ impl Install {
                     .map_err(InstallError::RemoveDummyCargoLock)?;
             }
 
-            user_output!(writer, "Compiling `rustc_codegen_spirv` from {source}\n")
-                .map_err(InstallError::IoWrite)?;
+            user_output!(
+                params.writer,
+                "Compiling `rustc_codegen_spirv` from {source}\n"
+            )
+            .map_err(InstallError::IoWrite)?;
 
             let mut cargo = CargoCmd::new();
             cargo
@@ -390,6 +392,88 @@ impl Install {
             target_spec_dir,
         })
     }
+}
+
+/// Parameters for [`Install::run()`].
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub struct InstallRunParams<W, T, C, O, E> {
+    /// Writer of user output.
+    pub writer: W,
+    /// Callbacks to halt toolchain installation.
+    pub halt: HaltToolchainInstallation<T, C>,
+    /// Configuration of [`Stdio`] for commands run during installation.
+    pub stdio_cfg: StdioCfg<O, E>,
+}
+
+impl<W, T, C, O, E> InstallRunParams<W, T, C, O, E> {
+    /// Replaces the writer of user output.
+    #[inline]
+    #[must_use]
+    pub fn writer<NW>(self, writer: NW) -> InstallRunParams<NW, T, C, O, E> {
+        InstallRunParams {
+            writer,
+            halt: self.halt,
+            stdio_cfg: self.stdio_cfg,
+        }
+    }
+
+    /// Replaces the callbacks to halt toolchain installation.
+    #[inline]
+    #[must_use]
+    pub fn halt<NT, NC>(
+        self,
+        halt: HaltToolchainInstallation<NT, NC>,
+    ) -> InstallRunParams<W, NT, NC, O, E> {
+        InstallRunParams {
+            writer: self.writer,
+            halt,
+            stdio_cfg: self.stdio_cfg,
+        }
+    }
+
+    /// Replaces the [`Stdio`] configuration for commands run during installation.
+    #[inline]
+    #[must_use]
+    pub fn stdio_cfg<NO, NE>(
+        self,
+        stdio_cfg: StdioCfg<NO, NE>,
+    ) -> InstallRunParams<W, T, C, NO, NE> {
+        InstallRunParams {
+            writer: self.writer,
+            halt: self.halt,
+            stdio_cfg,
+        }
+    }
+}
+
+/// [`Default`] parameters for [`Install::run()`].
+type DefaultInstallRunParams = InstallRunParams<
+    io::Empty,
+    NoopOnToolchainInstall,
+    NoopOnComponentsInstall,
+    NullStdout,
+    NullStderr,
+>;
+
+impl Default for DefaultInstallRunParams {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            writer: io::empty(),
+            halt: HaltToolchainInstallation::noop(),
+            stdio_cfg: StdioCfg::null(),
+        }
+    }
+}
+
+/// Returns the platform-specific filename of the dylib with the given name.
+#[inline]
+fn dylib_filename(name: impl AsRef<str>) -> String {
+    use std::env::consts::{DLL_PREFIX, DLL_SUFFIX};
+
+    let str_name = name.as_ref();
+    format!("{DLL_PREFIX}{str_name}{DLL_SUFFIX}")
 }
 
 /// An error indicating codegen `rustc_codegen_spirv` installation failure.
