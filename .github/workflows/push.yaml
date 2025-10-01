@@ -43,13 +43,7 @@ jobs:
     env:
       RUST_LOG: debug
     steps:
-      - uses: actions/checkout@v2
-      - uses: moonrepo/setup-rust@v1
-      - uses: extractions/setup-just@v2
-      - name: Install Rust toolchain
-        run: |
-          rustup default stable
-          rustup update
+      - uses: actions/checkout@v4
       - name: Fetch root dependencies
         run: cargo fetch --locked
       - name: Fetch shader-crate-template dependencies
@@ -63,11 +57,11 @@ jobs:
   lints:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: moonrepo/setup-rust@v1
-      - uses: extractions/setup-just@v2
+      - uses: actions/checkout@v4
       - uses: cargo-bins/cargo-binstall@main
-      - run: cargo binstall cargo-shear
+      - name: Install cargo-shear
+        run: cargo binstall cargo-shear
+      - run: cargo fetch --locked
       - run: cargo clippy -- --deny warnings
       - run: cargo fmt --check
       - run: cargo shear
