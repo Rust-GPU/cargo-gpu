@@ -1,18 +1,21 @@
 //! `cargo gpu build`, analogous to `cargo build`
 
-#![allow(clippy::shadow_reuse, reason = "let's not be silly")]
-#![allow(clippy::unwrap_used, reason = "this is basically a test")]
-
-use std::{io::Write as _, path::PathBuf};
+use core::convert::Infallible;
+use std::{io::Write as _, panic, path::PathBuf};
 
 use anyhow::Context as _;
-use cargo_gpu_build::{lockfile::LockfileMismatchHandler, spirv_cache::user_output};
-use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
+use cargo_gpu_build::{
+    build::{ShaderCrateBuilder, ShaderCrateBuilderParams},
+    spirv_builder::{CompileResult, ModuleResult, SpirvBuilder},
+    spirv_cache::backend::Install,
+};
 
-use crate::{linkage::Linkage, user_consent::ask_for_user_consent, Install};
+use crate::{linkage::Linkage, user_consent::ask_for_user_consent};
 
 /// Args for just a build
-#[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, clap::Parser, serde::Deserialize, serde::Serialize)]
+#[non_exhaustive]
+#[expect(clippy::module_name_repetitions, reason = "it is intended")]
 pub struct BuildArgs {
     /// Path to the output directory for the compiled shaders.
     #[clap(long, short, default_value = "./")]
@@ -22,12 +25,12 @@ pub struct BuildArgs {
     #[clap(long, short, action)]
     pub watch: bool,
 
-    /// the flattened [`SpirvBuilder`]
+    /// The flattened [`SpirvBuilder`]
     #[clap(flatten)]
     #[serde(flatten)]
     pub spirv_builder: SpirvBuilder,
 
-    ///Renames the manifest.json file to the given name
+    /// Renames the manifest.json file to the given name
     #[clap(long, short, default_value = "manifest.json")]
     pub manifest_file: String,
 }
@@ -45,7 +48,8 @@ impl Default for BuildArgs {
 }
 
 /// `cargo build` subcommands
-#[derive(Clone, clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, clap::Parser, serde::Deserialize, serde::Serialize)]
+#[non_exhaustive]
 pub struct Build {
     /// CLI args for install the `rust-gpu` compiler and components
     #[clap(flatten)]
@@ -57,21 +61,23 @@ pub struct Build {
 }
 
 impl Build {
-    /// Entrypoint
+    /// Builds the shader crate.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the build process fails somehow.
+    #[inline]
     pub fn run(&mut self) -> anyhow::Result<()> {
-        let skip_consent = self.install.params.auto_install_rust_toolchain;
-        let halt_installation = ask_for_user_consent(skip_consent);
-        let installed_backend = self.install.run(std::io::stdout(), halt_installation)?;
+        self.build.spirv_builder.path_to_crate = Some(self.install.shader_crate.clone());
 
-        let _lockfile_mismatch_handler = LockfileMismatchHandler::new(
-            &self.install.shader_crate,
-            &installed_backend.toolchain_channel,
-            self.install.params.force_overwrite_lockfiles_v4_to_v3,
-        )?;
+        let halt = ask_for_user_consent(self.install.params.auto_install_rust_toolchain);
+        let crate_builder_params = ShaderCrateBuilderParams::from(self.build.spirv_builder.clone())
+            .install(self.install.params.clone())
+            .halt(halt);
+        let crate_builder = ShaderCrateBuilder::new(crate_builder_params)?;
 
-        let builder = &mut self.build.spirv_builder;
-        builder.path_to_crate = Some(self.install.shader_crate.clone());
-        installed_backend.configure_spirv_builder(builder)?;
+        self.install = crate_builder.installed_backend_args.clone();
+        self.build.spirv_builder = crate_builder.builder.clone();
 
         // Ensure the shader output dir exists
         log::debug!(
@@ -83,40 +89,48 @@ impl Build {
         log::debug!("canonicalized output dir: {}", canonicalized.display());
         self.build.output_dir = canonicalized;
 
-        // Ensure the shader crate exists
-        self.install.shader_crate = dunce::canonicalize(&self.install.shader_crate)?;
-        anyhow::ensure!(
-            self.install.shader_crate.exists(),
-            "shader crate '{}' does not exist. (Current dir is '{}')",
-            self.install.shader_crate.display(),
-            std::env::current_dir()?.display()
-        );
-
         if self.build.watch {
-            let this = self.clone();
-            self.build
-                .spirv_builder
-                .watch(move |result, accept| {
-                    let result1 = this.parse_compilation_result(&result);
-                    if let Some(accept) = accept {
-                        accept.submit(result1);
-                    }
-                })?
-                .context("unreachable")??;
-            std::thread::park();
-        } else {
-            user_output!(
-                std::io::stdout(),
-                "Compiling shaders at {}...\n",
-                self.install.shader_crate.display()
-            )?;
-            let result = self.build.spirv_builder.build()?;
-            self.parse_compilation_result(&result)?;
+            let never = self.watch(crate_builder)?;
+            match never {}
         }
+        self.build(crate_builder)
+    }
+
+    /// Builds shader crate using [`ShaderCrateBuilder`].
+    fn build(&self, mut crate_builder: ShaderCrateBuilder) -> anyhow::Result<()> {
+        let result = crate_builder.build()?;
+        self.parse_compilation_result(&result)?;
         Ok(())
     }
 
-    /// Parses compilation result from `SpirvBuilder` and writes it out to a file
+    /// Watches shader crate for changes using [`ShaderCrateBuilder`].
+    fn watch(&self, mut crate_builder: ShaderCrateBuilder) -> anyhow::Result<Infallible> {
+        let this = self.clone();
+        let mut watcher = crate_builder.watch()?;
+        let watch_thread = std::thread::spawn(move || -> ! {
+            loop {
+                let compile_result = match watcher.recv() {
+                    Ok(compile_result) => compile_result,
+                    Err(err) => {
+                        log::error!("{err}");
+                        continue;
+                    }
+                };
+                if let Err(err) = this.parse_compilation_result(&compile_result) {
+                    log::error!("{err}");
+                }
+            }
+        });
+        match watch_thread.join() {
+            Ok(never) => never,
+            Err(payload) => {
+                log::error!("watch thread panicked");
+                panic::resume_unwind(payload)
+            }
+        }
+    }
+
+    /// Parses compilation result from [`SpirvBuilder`] and writes it out to a file
     fn parse_compilation_result(&self, result: &CompileResult) -> anyhow::Result<()> {
         let shaders = match &result.module {
             ModuleResult::MultiModule(modules) => {

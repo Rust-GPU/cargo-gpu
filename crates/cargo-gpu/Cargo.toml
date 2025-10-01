@@ -11,10 +11,10 @@ default-run = "cargo-gpu"
 
 [dependencies]
 cargo-gpu-build = { path = "../cargo-gpu-build", features = ["clap", "watch"] }
+spirv-builder = { workspace = true, features = ["clap", "watch"] }
 cargo_metadata.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
-spirv-builder = { workspace = true, features = ["clap", "watch"] }
 clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
@@ -22,7 +22,6 @@ relative-path.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 crossterm.workspace = true
-semver.workspace = true
 dunce.workspace = true
 
 [dev-dependencies]

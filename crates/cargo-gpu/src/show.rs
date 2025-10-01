@@ -2,14 +2,17 @@
 
 use std::{fs, path::Path};
 
-use anyhow::bail;
-use cargo_gpu_build::spirv_cache::{
-    cache::cache_dir, metadata::query_metadata, spirv_source::SpirvSource,
-    target_specs::update_target_specs_files,
+use cargo_gpu_build::{
+    spirv_builder::Capability,
+    spirv_cache::{
+        cache::cache_dir, metadata::query_metadata, spirv_source::SpirvSource,
+        target_specs::update_target_specs_files,
+    },
 };
 
 /// Show the computed source of the spirv-std dependency.
 #[derive(Clone, Debug, clap::Parser)]
+#[non_exhaustive]
 pub struct SpirvSourceDep {
     /// The location of the shader-crate to inspect to determine its spirv-std dependency.
     #[clap(long, default_value = "./")]
@@ -18,6 +21,7 @@ pub struct SpirvSourceDep {
 
 /// Different tidbits of information that can be queried at the command line.
 #[derive(Clone, Debug, clap::Subcommand)]
+#[non_exhaustive]
 pub enum Info {
     /// Displays the location of the cache directory
     CacheDirectory,
@@ -27,21 +31,26 @@ pub enum Info {
     Commitsh,
     /// All the available SPIR-V capabilities that can be set with `--capabilities`
     Capabilities,
-
     /// All available SPIR-V targets
     Targets(SpirvSourceDep),
 }
 
-/// `cargo gpu show`
+/// `cargo gpu show` subcommands.
 #[derive(clap::Parser)]
+#[non_exhaustive]
 pub struct Show {
-    /// Display information about rust-gpu
+    /// Display information about rust-gpu.
     #[clap(subcommand)]
-    command: Info,
+    pub command: Info,
 }
 
 impl Show {
-    /// Entrypoint
+    /// Entrypoint of `cargo gpu show` subcommands.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the command fails somehow.
+    #[inline]
     pub fn run(&self) -> anyhow::Result<()> {
         log::info!("{:?}: ", self.command);
 
@@ -84,12 +93,12 @@ impl Show {
     }
 
     /// Iterator over all `Capability` variants.
-    fn capability_variants_iter() -> impl Iterator<Item = spirv_builder::Capability> {
+    fn capability_variants_iter() -> impl Iterator<Item = Capability> {
         // Since spirv::Capability is repr(u32) we can iterate over
         // u32s until some maximum
         #[expect(clippy::as_conversions, reason = "We know all variants are repr(u32)")]
-        let last_capability = spirv_builder::Capability::CacheControlsINTEL as u32;
-        (0..=last_capability).filter_map(spirv_builder::Capability::from_u32)
+        let last_capability = Capability::CacheControlsINTEL as u32;
+        (0..=last_capability).filter_map(Capability::from_u32)
     }
 
     /// List all available spirv targets, note: the targets from compile time of cargo-gpu and those
@@ -100,7 +109,7 @@ impl Show {
         let source = SpirvSource::new(shader_crate, None, None)?;
         let install_dir = source.install_dir()?;
         if !install_dir.is_dir() {
-            bail!("rust-gpu version {} is not installed", source);
+            anyhow::bail!("rust-gpu version {} is not installed", source);
         }
         let dummy_metadata = query_metadata(&install_dir)?;
         let target_specs_dir = update_target_specs_files(&source, &dummy_metadata, false)?;
