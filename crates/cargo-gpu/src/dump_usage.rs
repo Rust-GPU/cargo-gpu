@@ -1,6 +1,8 @@
 //! Convenience function for internal use. Dumps all the CLI usage instructions. Useful for
 //! updating the README.
 
+#![cfg(feature = "clap")]
+
 use crate::{user_output, Cli};
 
 /// main dump usage function
