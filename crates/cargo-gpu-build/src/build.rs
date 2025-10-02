@@ -28,6 +28,28 @@ pub struct ShaderCrateBuilderParams<W, T, C, O, E> {
     pub build: SpirvBuilder,
     /// Parameters of the codegen backend installation for the shader crate.
     pub install: InstallParams,
+    /// There is a tricky situation where a shader crate that depends on workspace config can have
+    /// a different `Cargo.lock` lockfile version from the the workspace's `Cargo.lock`. This can
+    /// prevent builds when an old Rust toolchain doesn't recognise the newer lockfile version.
+    ///
+    /// The ideal way to resolve this would be to match the shader crate's toolchain with the
+    /// workspace's toolchain. However, that is not always possible. Another solution is to
+    /// `exclude = [...]` the problematic shader crate from the workspace. This also may not be a
+    /// suitable solution if there are a number of shader crates all sharing similar config and
+    /// you don't want to have to copy/paste and maintain that config across all the shaders.
+    ///
+    /// So a somewhat hacky workaround is to overwrite lockfile versions. Enabling this flag
+    /// will only come into effect if there are a mix of v3/v4 lockfiles. It will also
+    /// only overwrite versions for the duration of a build. It will attempt to return the versions
+    /// to their original values once the build is finished. However, of course, unexpected errors
+    /// can occur and the overwritten values can remain. Hence why this behaviour is not enabled by
+    /// default.
+    ///
+    /// This hack is possible because the change from v3 to v4 only involves a minor change to the
+    /// way source URLs are encoded. See these PRs for more details:
+    ///   * <https://github.com/rust-lang/cargo/pull/12280>
+    ///   * <https://github.com/rust-lang/cargo/pull/14595>
+    pub force_overwrite_lockfiles_v4_to_v3: bool,
     /// Writer of user output.
     pub writer: W,
     /// Callbacks to halt toolchain installation.
@@ -51,6 +73,19 @@ impl<W, T, C, O, E> ShaderCrateBuilderParams<W, T, C, O, E> {
         Self { install, ..self }
     }
 
+    /// Sets whether to force overwriting lockfiles from v4 to v3.
+    #[inline]
+    #[must_use]
+    pub fn force_overwrite_lockfiles_v4_to_v3(
+        self,
+        force_overwrite_lockfiles_v4_to_v3: bool,
+    ) -> Self {
+        Self {
+            force_overwrite_lockfiles_v4_to_v3,
+            ..self
+        }
+    }
+
     /// Replaces the writer of user output.
     #[inline]
     #[must_use]
@@ -58,6 +93,7 @@ impl<W, T, C, O, E> ShaderCrateBuilderParams<W, T, C, O, E> {
         ShaderCrateBuilderParams {
             build: self.build,
             install: self.install,
+            force_overwrite_lockfiles_v4_to_v3: self.force_overwrite_lockfiles_v4_to_v3,
             writer,
             halt: self.halt,
             stdio_cfg: self.stdio_cfg,
@@ -74,6 +110,7 @@ impl<W, T, C, O, E> ShaderCrateBuilderParams<W, T, C, O, E> {
         ShaderCrateBuilderParams {
             build: self.build,
             install: self.install,
+            force_overwrite_lockfiles_v4_to_v3: self.force_overwrite_lockfiles_v4_to_v3,
             writer: self.writer,
             halt,
             stdio_cfg: self.stdio_cfg,
@@ -90,6 +127,7 @@ impl<W, T, C, O, E> ShaderCrateBuilderParams<W, T, C, O, E> {
         ShaderCrateBuilderParams {
             build: self.build,
             install: self.install,
+            force_overwrite_lockfiles_v4_to_v3: self.force_overwrite_lockfiles_v4_to_v3,
             writer: self.writer,
             halt: self.halt,
             stdio_cfg,
@@ -122,6 +160,7 @@ impl Default for DefaultShaderCrateBuilderParams {
         Self {
             build: SpirvBuilder::default(),
             install: InstallParams::default(),
+            force_overwrite_lockfiles_v4_to_v3: false,
             writer: io::stdout(),
             halt: HaltToolchainInstallation::noop(),
             stdio_cfg: StdioCfg::inherit(),
@@ -172,6 +211,7 @@ where
         let ShaderCrateBuilderParams {
             mut build,
             install,
+            force_overwrite_lockfiles_v4_to_v3,
             mut writer,
             halt,
             mut stdio_cfg,
@@ -202,7 +242,7 @@ where
         let lockfile_mismatch_handler = LockfileMismatchHandler::new(
             &backend_to_install.shader_crate,
             &backend.toolchain_channel,
-            backend_to_install.params.force_overwrite_lockfiles_v4_to_v3,
+            force_overwrite_lockfiles_v4_to_v3,
         )?;
 
         #[expect(clippy::unreachable, reason = "target was already set")]
