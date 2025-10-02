@@ -12,7 +12,7 @@ use cargo_gpu_build::{
 
 use crate::{linkage::Linkage, user_consent::ask_for_user_consent};
 
-/// Args for just a build
+/// Args for just a build.
 #[derive(Debug, Clone, clap::Parser, serde::Deserialize, serde::Serialize)]
 #[non_exhaustive]
 #[expect(clippy::module_name_repetitions, reason = "it is intended")]
@@ -25,12 +25,12 @@ pub struct BuildArgs {
     #[clap(long, short, action)]
     pub watch: bool,
 
-    /// The flattened [`SpirvBuilder`]
+    /// The flattened [`SpirvBuilder`].
     #[clap(flatten)]
     #[serde(flatten)]
     pub spirv_builder: SpirvBuilder,
 
-    /// Renames the manifest.json file to the given name
+    /// Renames the manifest.json file to the given name.
     #[clap(long, short, default_value = "manifest.json")]
     pub manifest_file: String,
 }
@@ -47,15 +47,29 @@ impl Default for BuildArgs {
     }
 }
 
+/// Args for just an install.
+#[derive(Clone, Debug, clap::Parser, serde::Deserialize, serde::Serialize)]
+#[non_exhaustive]
+pub struct InstallArgs {
+    /// The flattened [`Install`].
+    #[clap(flatten)]
+    #[serde(flatten)]
+    pub backend: Install,
+
+    /// Assume "yes" to "Install Rust toolchain: [y/n]" prompt.
+    #[clap(long, action)]
+    pub auto_install_rust_toolchain: bool,
+}
+
 /// `cargo build` subcommands
 #[derive(Clone, Debug, clap::Parser, serde::Deserialize, serde::Serialize)]
 #[non_exhaustive]
 pub struct Build {
-    /// CLI args for install the `rust-gpu` compiler and components
+    /// CLI args for install the `rust-gpu` compiler and components.
     #[clap(flatten)]
-    pub install: Install,
+    pub install: InstallArgs,
 
-    /// CLI args for configuring the build of the shader
+    /// CLI args for configuring the build of the shader.
     #[clap(flatten)]
     pub build: BuildArgs,
 }
@@ -68,15 +82,15 @@ impl Build {
     /// Returns an error if the build process fails somehow.
     #[inline]
     pub fn run(&mut self) -> anyhow::Result<()> {
-        self.build.spirv_builder.path_to_crate = Some(self.install.shader_crate.clone());
+        self.build.spirv_builder.path_to_crate = Some(self.install.backend.shader_crate.clone());
 
-        let halt = ask_for_user_consent(self.install.params.auto_install_rust_toolchain);
+        let halt = ask_for_user_consent(self.install.auto_install_rust_toolchain);
         let crate_builder_params = ShaderCrateBuilderParams::from(self.build.spirv_builder.clone())
-            .install(self.install.params.clone())
+            .install(self.install.backend.params.clone())
             .halt(halt);
         let crate_builder = ShaderCrateBuilder::new(crate_builder_params)?;
 
-        self.install = crate_builder.installed_backend_args.clone();
+        self.install.backend = crate_builder.installed_backend_args.clone();
         self.build.spirv_builder = crate_builder.builder.clone();
 
         // Ensure the shader output dir exists
@@ -130,7 +144,7 @@ impl Build {
         }
     }
 
-    /// Parses compilation result from [`SpirvBuilder`] and writes it out to a file
+    /// Parses compilation result from [`SpirvBuilder`] and writes it out to a file.
     fn parse_compilation_result(&self, result: &CompileResult) -> anyhow::Result<()> {
         let shaders = match &result.module {
             ModuleResult::MultiModule(modules) => {
@@ -157,10 +171,10 @@ impl Build {
                 log::debug!(
                     "linkage of {} relative to {}",
                     path.display(),
-                    self.install.shader_crate.display()
+                    self.install.backend.shader_crate.display()
                 );
                 let spv_path = path
-                    .relative_to(&self.install.shader_crate)
+                    .relative_to(&self.install.backend.shader_crate)
                     .map_or(path, |path_relative_to_shader_crate| {
                         path_relative_to_shader_crate.to_path("")
                     });
@@ -216,7 +230,7 @@ mod test {
             command: Command::Build(build),
         } = Cli::parse_from(args)
         {
-            assert_eq!(shader_crate_path, build.install.shader_crate);
+            assert_eq!(shader_crate_path, build.install.backend.shader_crate);
             assert_eq!(output_dir, build.build.output_dir);
 
             // TODO:

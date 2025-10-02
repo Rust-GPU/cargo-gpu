@@ -103,7 +103,7 @@ mod test {
         )
         .unwrap();
         assert!(!args.build.spirv_builder.release);
-        assert!(args.install.params.auto_install_rust_toolchain);
+        assert!(args.install.auto_install_rust_toolchain);
     }
 
     #[test_log::test]
@@ -124,7 +124,7 @@ mod test {
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
         assert!(!args.build.spirv_builder.release);
-        assert!(args.install.params.auto_install_rust_toolchain);
+        assert!(args.install.auto_install_rust_toolchain);
     }
 
     fn update_cargo_output_dir() -> std::path::PathBuf {

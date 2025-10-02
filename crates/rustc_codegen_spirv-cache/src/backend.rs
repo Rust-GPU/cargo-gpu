@@ -111,7 +111,6 @@ pub struct Install {
 }
 
 /// Parameters of the codegen backend installation.
-#[expect(clippy::struct_excessive_bools, reason = "expected to have many bools")]
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 #[cfg_attr(feature = "clap", derive(clap::Parser))]
 #[non_exhaustive]
@@ -139,12 +138,6 @@ pub struct InstallParams {
     /// Force `rustc_codegen_spirv` to be rebuilt.
     #[cfg_attr(feature = "clap", clap(long))]
     pub rebuild_codegen: bool,
-
-    /// Assume "yes" to "Install Rust toolchain: [y/n]" prompt.
-    ///
-    /// Defaults to `false` in cli, `true` in [`Default`] implementation.
-    #[cfg_attr(feature = "clap", clap(long, action))]
-    pub auto_install_rust_toolchain: bool,
 
     /// Clear target dir of `rustc_codegen_spirv` build after a successful build,
     /// saves about 200MiB of disk space.
@@ -183,7 +176,6 @@ impl Default for InstallParams {
             spirv_builder_source: None,
             spirv_builder_version: None,
             rebuild_codegen: false,
-            auto_install_rust_toolchain: true,
             clear_target: true,
             force_overwrite_lockfiles_v4_to_v3: false,
         }
