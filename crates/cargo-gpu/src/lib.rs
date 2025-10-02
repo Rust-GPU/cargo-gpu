@@ -85,16 +85,16 @@ impl Command {
                     command.install
                 );
 
-                let skip_consent = command.install.params.auto_install_rust_toolchain;
+                let skip_consent = command.install.auto_install_rust_toolchain;
                 let halt = ask_for_user_consent(skip_consent);
                 let install_params = InstallRunParams::default()
                     .writer(std::io::stdout())
                     .halt(halt)
                     .stdio_cfg(StdioCfg::inherit());
-                command.install.run(install_params)?;
+                command.install.backend.run(install_params)?;
             }
             Self::Build(build) => {
-                let shader_crate_path = &build.install.shader_crate;
+                let shader_crate_path = &build.install.backend.shader_crate;
                 let mut command =
                     config::Config::clap_command_with_cargo_config(shader_crate_path, env_args)?;
                 log::debug!("building with final merged arguments: {command:#?}");
