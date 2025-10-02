@@ -69,7 +69,7 @@ impl LockfileMismatchHandler {
         })
     }
 
-    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](crate::cache::install::InstallParams::force_overwrite_lockfiles_v4_to_v3)
+    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](field@crate::build::ShaderCrateBuilderParams::force_overwrite_lockfiles_v4_to_v3)
     /// flag for why we do this.
     fn ensure_workspace_rust_version_does_not_conflict_with_shader(
         shader_crate_path: &Path,
@@ -97,7 +97,7 @@ impl LockfileMismatchHandler {
         }
     }
 
-    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](crate::cache::install::InstallParams::force_overwrite_lockfiles_v4_to_v3)
+    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](field@crate::build::ShaderCrateBuilderParams::force_overwrite_lockfiles_v4_to_v3)
     /// flag for why we do this.
     fn ensure_shader_rust_version_does_not_conflict_with_any_cargo_locks(
         shader_crate_path: &Path,
@@ -335,7 +335,7 @@ pub enum LockfileMismatchError {
     /// Conflicting lockfile manifest versions detected, with advice on how to resolve them
     /// by setting the [`force_overwrite_lockfiles_v4_to_v3`] flag.
     ///
-    /// [`force_overwrite_lockfiles_v4_to_v3`]: crate::spirv_cache::backend::InstallParams::force_overwrite_lockfiles_v4_to_v3
+    /// [`force_overwrite_lockfiles_v4_to_v3`]: field@crate::build::ShaderCrateBuilderParams::force_overwrite_lockfiles_v4_to_v3
     #[error(
         r#"conflicting `Cargo.lock` versions detected ⚠️
 
