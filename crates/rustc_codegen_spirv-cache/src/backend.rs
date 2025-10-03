@@ -19,12 +19,11 @@ use std::{
     process::Stdio,
 };
 
-use spirv_builder::{cargo_cmd::CargoCmd, SpirvBuilder, SpirvBuilderError};
-
 use crate::{
     cache::{cache_dir, CacheDirError},
     command::{execute_command, CommandExecError},
     metadata::{query_metadata, MetadataExt as _, MissingPackageError, QueryMetadataError},
+    spirv_builder::{cargo_cmd::CargoCmd, SpirvBuilder, SpirvBuilderError},
     spirv_source::{
         rust_gpu_toolchain_channel, RustGpuToolchainChannelError, SpirvSource, SpirvSourceError,
     },
@@ -201,28 +200,7 @@ impl Install {
         fs::File::create(src.join("lib.rs")).map_err(InstallError::CreateDummyLibRs)?;
 
         log::trace!("writing dummy Cargo.toml");
-
-        /// Contents of the `Cargo.toml` file for the local `rustc_codegen_spirv_dummy` crate.
-        #[expect(clippy::items_after_statements, reason = "local constant")]
-        const DUMMY_CARGO_TOML: &str = include_str!("dummy/Cargo.toml");
-
-        let version_spec = match &source {
-            SpirvSource::CratesIO(version) => format!("version = \"{version}\""),
-            SpirvSource::Git { url, rev } => format!("git = \"{url}\"\nrev = \"{rev}\""),
-            SpirvSource::Path {
-                rust_gpu_repo_root,
-                version,
-            } => {
-                // this branch is currently unreachable, as we just build `rustc_codegen_spirv` directly,
-                // since we don't need the `dummy` crate to make cargo download it for us
-                let mut new_path = rust_gpu_repo_root.to_owned();
-                new_path.push("crates/spirv-builder");
-                format!("path = \"{new_path}\"\nversion = \"{version}\"")
-            }
-        };
-
-        let cargo_toml = format!("{DUMMY_CARGO_TOML}{version_spec}\n");
-        fs::write(checkout.join("Cargo.toml"), cargo_toml)
+        fs::write(checkout.join("Cargo.toml"), dummy_cargo_toml(source))
             .map_err(InstallError::WriteDummyCargoToml)?;
 
         Ok(())
@@ -411,7 +389,7 @@ impl<W, T, C, O, E> InstallRunParams<W, T, C, O, E> {
 }
 
 /// [`Default`] parameters for [`Install::run()`].
-type DefaultInstallRunParams = InstallRunParams<
+pub type DefaultInstallRunParams = InstallRunParams<
     io::Empty,
     NoopOnToolchainInstall,
     NoopOnComponentsInstall,
@@ -437,6 +415,28 @@ fn dylib_filename(name: impl AsRef<str>) -> String {
 
     let str_name = name.as_ref();
     format!("{DLL_PREFIX}{str_name}{DLL_SUFFIX}")
+}
+
+/// Contents of the `Cargo.toml` file for the local `rustc_codegen_spirv_dummy` crate
+/// without the version specification of the `rustc_codegen_spirv` dependency.
+const DUMMY_CARGO_TOML_NO_VERSION_SPEC: &str = include_str!("dummy/Cargo.toml");
+
+/// Returns the contents of the `Cargo.toml` file for the local `rustc_codegen_spirv_dummy` crate.
+fn dummy_cargo_toml(source: &SpirvSource) -> String {
+    let version_spec = match source {
+        SpirvSource::CratesIO(version) => format!("version = \"{version}\""),
+        SpirvSource::Git { url, rev } => format!("git = \"{url}\"\nrev = \"{rev}\""),
+        SpirvSource::Path {
+            rust_gpu_repo_root,
+            version,
+        } => {
+            // this branch is currently unreachable, as we just build `rustc_codegen_spirv` directly,
+            // since we don't need the `dummy` crate to make cargo download it for us
+            let new_path = rust_gpu_repo_root.join("crates").join("spirv-builder");
+            format!("path = \"{new_path}\"\nversion = \"{version}\"")
+        }
+    };
+    format!("{DUMMY_CARGO_TOML_NO_VERSION_SPEC}{version_spec}\n")
 }
 
 /// An error indicating codegen `rustc_codegen_spirv` installation failure.

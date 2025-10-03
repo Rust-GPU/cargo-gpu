@@ -20,7 +20,7 @@
 
 #![expect(clippy::pub_use, reason = "part of public API")]
 
-pub use cargo_gpu_build::spirv_cache;
+pub use cargo_gpu_build::{spirv_builder, spirv_cache};
 
 pub use self::spirv_cache::backend::Install;
 
@@ -64,6 +64,7 @@ pub enum Command {
     /// A hidden command that can be used to recursively print out all the subcommand help messages:
     ///   `cargo gpu dump-usage`
     /// Useful for updating the README.
+    #[doc(hidden)]
     #[clap(hide(true))]
     DumpUsage,
 }

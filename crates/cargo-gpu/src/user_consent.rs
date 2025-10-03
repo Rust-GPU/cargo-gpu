@@ -23,7 +23,7 @@ pub fn ask_for_user_consent(
 > {
     let on_toolchain_install = move |channel: &str| {
         let message = format!("Rust {channel} with `rustup`");
-        get_consent_for_toolchain_install(format!("Install {message}").as_ref(), skip)?;
+        get_user_consent(format!("Install {message}"), skip)?;
         log::debug!("installing toolchain {channel}");
         user_output!(io::stdout(), "Installing {message}\n").map_err(UserConsentError::IoWrite)?;
         Ok(())
@@ -32,7 +32,7 @@ pub fn ask_for_user_consent(
         let message = format!(
             "components {REQUIRED_TOOLCHAIN_COMPONENTS:?} for toolchain {channel} with `rustup`"
         );
-        get_consent_for_toolchain_install(format!("Install {message}").as_ref(), skip)?;
+        get_user_consent(format!("Install {message}"), skip)?;
         log::debug!("installing required components of toolchain {channel}");
         user_output!(io::stdout(), "Installing {message}\n").map_err(UserConsentError::IoWrite)?;
         Ok(())
@@ -44,8 +44,8 @@ pub fn ask_for_user_consent(
     }
 }
 
-/// Prompt user if they want to install a new Rust toolchain.
-fn get_consent_for_toolchain_install(prompt: &str, skip: bool) -> Result<(), UserConsentError> {
+/// Prompt user if they want to install a new Rust toolchain or its components.
+fn get_user_consent(prompt: impl AsRef<str>, skip: bool) -> Result<(), UserConsentError> {
     if skip {
         return Ok(());
     }
@@ -57,7 +57,7 @@ fn get_consent_for_toolchain_install(prompt: &str, skip: bool) -> Result<(), Use
 
     log::debug!("asking for consent to install the required toolchain");
     crossterm::terminal::enable_raw_mode().map_err(UserConsentError::IoRead)?;
-    user_output!(io::stdout(), "{prompt} [y/n]: ").map_err(UserConsentError::IoWrite)?;
+    user_output!(io::stdout(), "{} [y/n]: ", prompt.as_ref()).map_err(UserConsentError::IoWrite)?;
     let mut input = crossterm::event::read().map_err(UserConsentError::IoRead)?;
 
     if let crossterm::event::Event::Key(crossterm::event::KeyEvent {

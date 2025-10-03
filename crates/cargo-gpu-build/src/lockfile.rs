@@ -12,8 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rustc_codegen_spirv_cache::spirv_builder::query_rustc_version;
-use semver::Version;
+use crate::spirv_cache::{cargo_metadata::semver::Version, spirv_builder::query_rustc_version};
 
 /// `Cargo.lock` manifest version 4 became the default in Rust 1.83.0. Conflicting manifest
 /// versions between the workspace and the shader crate, can cause problems.
