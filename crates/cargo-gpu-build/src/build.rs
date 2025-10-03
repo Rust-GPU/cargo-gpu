@@ -7,7 +7,10 @@ use crate::{
     lockfile::{LockfileMismatchError, LockfileMismatchHandler},
     spirv_builder::{CompileResult, SpirvBuilder, SpirvBuilderError},
     spirv_cache::{
-        backend::{Install, InstallError, InstallParams, InstallRunParams, InstalledBackend},
+        backend::{
+            SpirvCodegenBackend, SpirvCodegenBackendInstallError, SpirvCodegenBackendInstallParams,
+            SpirvCodegenBackendInstaller,
+        },
         command::CommandExecError,
         toolchain::{
             HaltToolchainInstallation, InheritStderr, InheritStdout, NoopOnComponentsInstall,
@@ -20,14 +23,14 @@ use crate::{
 #[cfg(feature = "watch")]
 use crate::spirv_builder::SpirvWatcher;
 
-/// Parameters for [`ShaderCrateBuilder::new()`].
+/// Parameters for [`CargoGpuBuilder::new()`].
 #[derive(Debug, Clone)]
 #[non_exhaustive]
-pub struct ShaderCrateBuilderParams<W, T, C, O, E> {
+pub struct CargoGpuBuilderParams<W, T, C, O, E> {
     /// Parameters of the shader crate build.
     pub build: SpirvBuilder,
     /// Parameters of the codegen backend installation for the shader crate.
-    pub install: InstallParams,
+    pub install: SpirvCodegenBackendInstaller,
     /// There is a tricky situation where a shader crate that depends on workspace config can have
     /// a different `Cargo.lock` lockfile version from the the workspace's `Cargo.lock`. This can
     /// prevent builds when an old Rust toolchain doesn't recognise the newer lockfile version.
@@ -58,7 +61,7 @@ pub struct ShaderCrateBuilderParams<W, T, C, O, E> {
     pub stdio_cfg: StdioCfg<O, E>,
 }
 
-impl<W, T, C, O, E> ShaderCrateBuilderParams<W, T, C, O, E> {
+impl<W, T, C, O, E> CargoGpuBuilderParams<W, T, C, O, E> {
     /// Replaces build parameters of the shader crate.
     #[inline]
     #[must_use]
@@ -69,7 +72,7 @@ impl<W, T, C, O, E> ShaderCrateBuilderParams<W, T, C, O, E> {
     /// Replaces codegen backend installation parameters of the shader crate.
     #[inline]
     #[must_use]
-    pub fn install(self, install: InstallParams) -> Self {
+    pub fn install(self, install: SpirvCodegenBackendInstaller) -> Self {
         Self { install, ..self }
     }
 
@@ -89,8 +92,8 @@ impl<W, T, C, O, E> ShaderCrateBuilderParams<W, T, C, O, E> {
     /// Replaces the writer of user output.
     #[inline]
     #[must_use]
-    pub fn writer<NW>(self, writer: NW) -> ShaderCrateBuilderParams<NW, T, C, O, E> {
-        ShaderCrateBuilderParams {
+    pub fn writer<NW>(self, writer: NW) -> CargoGpuBuilderParams<NW, T, C, O, E> {
+        CargoGpuBuilderParams {
             build: self.build,
             install: self.install,
             force_overwrite_lockfiles_v4_to_v3: self.force_overwrite_lockfiles_v4_to_v3,
@@ -106,8 +109,8 @@ impl<W, T, C, O, E> ShaderCrateBuilderParams<W, T, C, O, E> {
     pub fn halt<NT, NC>(
         self,
         halt: HaltToolchainInstallation<NT, NC>,
-    ) -> ShaderCrateBuilderParams<W, NT, NC, O, E> {
-        ShaderCrateBuilderParams {
+    ) -> CargoGpuBuilderParams<W, NT, NC, O, E> {
+        CargoGpuBuilderParams {
             build: self.build,
             install: self.install,
             force_overwrite_lockfiles_v4_to_v3: self.force_overwrite_lockfiles_v4_to_v3,
@@ -123,8 +126,8 @@ impl<W, T, C, O, E> ShaderCrateBuilderParams<W, T, C, O, E> {
     pub fn stdio_cfg<NO, NE>(
         self,
         stdio_cfg: StdioCfg<NO, NE>,
-    ) -> ShaderCrateBuilderParams<W, T, C, NO, NE> {
-        ShaderCrateBuilderParams {
+    ) -> CargoGpuBuilderParams<W, T, C, NO, NE> {
+        CargoGpuBuilderParams {
             build: self.build,
             install: self.install,
             force_overwrite_lockfiles_v4_to_v3: self.force_overwrite_lockfiles_v4_to_v3,
@@ -135,8 +138,8 @@ impl<W, T, C, O, E> ShaderCrateBuilderParams<W, T, C, O, E> {
     }
 }
 
-/// [`Default`] parameters for [`ShaderCrateBuilder::new()`].
-pub type DefaultShaderCrateBuilderParams = ShaderCrateBuilderParams<
+/// [`Default`] parameters for [`CargoGpuBuilder::new()`].
+pub type DefaultCargoGpuBuilderParams = CargoGpuBuilderParams<
     io::Stdout,
     NoopOnToolchainInstall,
     NoopOnComponentsInstall,
@@ -144,7 +147,7 @@ pub type DefaultShaderCrateBuilderParams = ShaderCrateBuilderParams<
     InheritStderr,
 >;
 
-impl From<SpirvBuilder> for DefaultShaderCrateBuilderParams {
+impl From<SpirvBuilder> for DefaultCargoGpuBuilderParams {
     #[inline]
     fn from(build: SpirvBuilder) -> Self {
         Self {
@@ -154,12 +157,12 @@ impl From<SpirvBuilder> for DefaultShaderCrateBuilderParams {
     }
 }
 
-impl Default for DefaultShaderCrateBuilderParams {
+impl Default for DefaultCargoGpuBuilderParams {
     #[inline]
     fn default() -> Self {
         Self {
             build: SpirvBuilder::default(),
-            install: InstallParams::default(),
+            install: SpirvCodegenBackendInstaller::default(),
             force_overwrite_lockfiles_v4_to_v3: false,
             writer: io::stdout(),
             halt: HaltToolchainInstallation::noop(),
@@ -171,20 +174,20 @@ impl Default for DefaultShaderCrateBuilderParams {
 /// A builder for compiling a `rust-gpu` shader crate.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
-pub struct ShaderCrateBuilder<W = io::Stdout> {
+pub struct CargoGpuBuilder<W = io::Stdout> {
     /// The underlying builder for compiling the shader crate.
     pub builder: SpirvBuilder,
-    /// The arguments used to install the backend.
-    pub installed_backend_args: Install,
-    /// The installed backend.
-    pub installed_backend: InstalledBackend,
+    /// The underlying codegen backend installer for the shader crate.
+    pub installer: SpirvCodegenBackendInstaller,
+    /// The installed codegen backend.
+    pub codegen_backend: SpirvCodegenBackend,
     /// The lockfile mismatch handler.
     pub lockfile_mismatch_handler: LockfileMismatchHandler,
     /// Writer of user output.
     pub writer: W,
 }
 
-impl<W> ShaderCrateBuilder<W>
+impl<W> CargoGpuBuilder<W>
 where
     W: io::Write,
 {
@@ -199,16 +202,16 @@ where
     /// * the backend installation fails,
     /// * there is a lockfile version mismatch that cannot be resolved automatically.
     #[inline]
-    pub fn new<I, R, T, C, O, E>(params: I) -> Result<Self, NewShaderCrateBuilderError<R>>
+    pub fn new<I, R, T, C, O, E>(params: I) -> Result<Self, NewCargoGpuBuilderError<R>>
     where
-        I: Into<ShaderCrateBuilderParams<W, T, C, O, E>>,
+        I: Into<CargoGpuBuilderParams<W, T, C, O, E>>,
         R: From<CommandExecError>,
         T: FnOnce(&str) -> Result<(), R>,
         C: FnOnce(&str) -> Result<(), R>,
         O: FnMut() -> Stdio,
         E: FnMut() -> Stdio,
     {
-        let ShaderCrateBuilderParams {
+        let CargoGpuBuilderParams {
             mut build,
             install,
             force_overwrite_lockfiles_v4_to_v3,
@@ -218,16 +221,16 @@ where
         } = params.into();
 
         if build.target.is_none() {
-            return Err(NewShaderCrateBuilderError::MissingTarget);
+            return Err(NewCargoGpuBuilderError::MissingTarget);
         }
         let path_to_crate = build
             .path_to_crate
             .as_ref()
-            .ok_or(NewShaderCrateBuilderError::MissingCratePath)?;
+            .ok_or(NewCargoGpuBuilderError::MissingCratePath)?;
         let shader_crate = dunce::canonicalize(path_to_crate)?;
+        build.path_to_crate = Some(shader_crate.clone());
 
-        let backend_to_install = Install::new(shader_crate, install);
-        let backend_install_params = InstallRunParams::default()
+        let backend_install_params = SpirvCodegenBackendInstallParams::from(&shader_crate)
             .writer(&mut writer)
             .halt(HaltToolchainInstallation {
                 on_toolchain_install: |channel: &str| (halt.on_toolchain_install)(channel),
@@ -237,23 +240,23 @@ where
                 stdout: || (stdio_cfg.stdout)(),
                 stderr: || (stdio_cfg.stderr)(),
             });
-        let backend = backend_to_install.run(backend_install_params)?;
+        let codegen_backend = install.install(backend_install_params)?;
 
         let lockfile_mismatch_handler = LockfileMismatchHandler::new(
-            &backend_to_install.shader_crate,
-            &backend.toolchain_channel,
+            &shader_crate,
+            &codegen_backend.toolchain_channel,
             force_overwrite_lockfiles_v4_to_v3,
         )?;
 
-        #[expect(clippy::unreachable, reason = "target was already set")]
-        backend
+        #[expect(clippy::unreachable, reason = "target was set")]
+        codegen_backend
             .configure_spirv_builder(&mut build)
-            .unwrap_or_else(|_| unreachable!("target was checked before calling this function"));
+            .unwrap_or_else(|_| unreachable!("target was set before calling this function"));
 
         Ok(Self {
             builder: build,
-            installed_backend_args: backend_to_install,
-            installed_backend: backend,
+            installer: install,
+            codegen_backend,
             lockfile_mismatch_handler,
             writer,
         })
@@ -265,8 +268,13 @@ where
     ///
     /// Returns an error if building the shader crate failed.
     #[inline]
-    pub fn build(&mut self) -> Result<CompileResult, ShaderCrateBuildError> {
-        let shader_crate = self.installed_backend_args.shader_crate.display();
+    pub fn build(&mut self) -> Result<CompileResult, CargoGpuBuildError> {
+        let shader_crate = self
+            .builder
+            .path_to_crate
+            .as_ref()
+            .ok_or(SpirvBuilderError::MissingCratePath)?
+            .display();
         user_output!(&mut self.writer, "Compiling shaders at {shader_crate}...\n")?;
 
         let result = self.builder.build()?;
@@ -280,8 +288,13 @@ where
     /// Returns an error if watching shader crate for changes failed.
     #[cfg(feature = "watch")]
     #[inline]
-    pub fn watch(&mut self) -> Result<SpirvWatcher, ShaderCrateBuildError> {
-        let shader_crate = self.installed_backend_args.shader_crate.display();
+    pub fn watch(&mut self) -> Result<SpirvWatcher, CargoGpuBuildError> {
+        let shader_crate = self
+            .builder
+            .path_to_crate
+            .as_ref()
+            .ok_or(SpirvBuilderError::MissingCratePath)?
+            .display();
         user_output!(
             &mut self.writer,
             "Watching shaders for changes at {shader_crate}...\n"
@@ -292,10 +305,10 @@ where
     }
 }
 
-/// An error indicating what went wrong when creating a [`ShaderCrateBuilder`].
+/// An error indicating what went wrong when creating a [`CargoGpuBuilder`].
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum NewShaderCrateBuilderError<E = CommandExecError> {
+pub enum NewCargoGpuBuilderError<E = CommandExecError> {
     /// Shader crate target is missing from parameters of the build.
     #[error("shader crate target must be set, for example `spirv-unknown-vulkan1.2`")]
     MissingTarget,
@@ -307,7 +320,7 @@ pub enum NewShaderCrateBuilderError<E = CommandExecError> {
     InvalidCratePath(#[from] io::Error),
     /// The backend installation failed.
     #[error("could not install backend: {0}")]
-    Install(#[from] InstallError<E>),
+    Install(#[from] SpirvCodegenBackendInstallError<E>),
     /// There is a lockfile version mismatch that cannot be resolved automatically.
     #[error(transparent)]
     LockfileMismatch(#[from] LockfileMismatchError),
@@ -316,7 +329,7 @@ pub enum NewShaderCrateBuilderError<E = CommandExecError> {
 /// An error indicating what went wrong when building the shader crate.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum ShaderCrateBuildError {
+pub enum CargoGpuBuildError {
     /// Failed to write user output.
     #[error("failed to write user output: {0}")]
     IoWrite(#[from] io::Error),

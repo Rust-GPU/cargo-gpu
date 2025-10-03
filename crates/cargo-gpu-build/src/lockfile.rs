@@ -12,8 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rustc_codegen_spirv_cache::spirv_builder::query_rustc_version;
-use semver::Version;
+use crate::spirv_cache::{cargo_metadata::semver::Version, spirv_builder::query_rustc_version};
 
 /// `Cargo.lock` manifest version 4 became the default in Rust 1.83.0. Conflicting manifest
 /// versions between the workspace and the shader crate, can cause problems.
@@ -69,7 +68,7 @@ impl LockfileMismatchHandler {
         })
     }
 
-    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](field@crate::build::ShaderCrateBuilderParams::force_overwrite_lockfiles_v4_to_v3)
+    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](field@crate::build::CargoGpuBuilderParams::force_overwrite_lockfiles_v4_to_v3)
     /// flag for why we do this.
     fn ensure_workspace_rust_version_does_not_conflict_with_shader(
         shader_crate_path: &Path,
@@ -97,7 +96,7 @@ impl LockfileMismatchHandler {
         }
     }
 
-    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](field@crate::build::ShaderCrateBuilderParams::force_overwrite_lockfiles_v4_to_v3)
+    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](field@crate::build::CargoGpuBuilderParams::force_overwrite_lockfiles_v4_to_v3)
     /// flag for why we do this.
     fn ensure_shader_rust_version_does_not_conflict_with_any_cargo_locks(
         shader_crate_path: &Path,
@@ -335,7 +334,7 @@ pub enum LockfileMismatchError {
     /// Conflicting lockfile manifest versions detected, with advice on how to resolve them
     /// by setting the [`force_overwrite_lockfiles_v4_to_v3`] flag.
     ///
-    /// [`force_overwrite_lockfiles_v4_to_v3`]: field@crate::build::ShaderCrateBuilderParams::force_overwrite_lockfiles_v4_to_v3
+    /// [`force_overwrite_lockfiles_v4_to_v3`]: field@crate::build::CargoGpuBuilderParams::force_overwrite_lockfiles_v4_to_v3
     #[error(
         r#"conflicting `Cargo.lock` versions detected ⚠️
 

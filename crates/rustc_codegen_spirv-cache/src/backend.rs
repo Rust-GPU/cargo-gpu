@@ -19,12 +19,11 @@ use std::{
     process::Stdio,
 };
 
-use spirv_builder::{cargo_cmd::CargoCmd, SpirvBuilder, SpirvBuilderError};
-
 use crate::{
     cache::{cache_dir, CacheDirError},
     command::{execute_command, CommandExecError},
     metadata::{query_metadata, MetadataExt as _, MissingPackageError, QueryMetadataError},
+    spirv_builder::{cargo_cmd::CargoCmd, SpirvBuilder, SpirvBuilderError},
     spirv_source::{
         rust_gpu_toolchain_channel, RustGpuToolchainChannelError, SpirvSource, SpirvSourceError,
     },
@@ -40,7 +39,7 @@ use crate::{
 #[derive(Debug, Default, Clone)]
 #[non_exhaustive]
 #[expect(clippy::module_name_repetitions, reason = "this is intended")]
-pub struct InstalledBackend {
+pub struct SpirvCodegenBackend {
     /// Path to the `rustc_codegen_spirv` dylib.
     pub rustc_codegen_spirv_location: PathBuf,
     /// Toolchain channel name.
@@ -49,7 +48,7 @@ pub struct InstalledBackend {
     pub target_spec_dir: PathBuf,
 }
 
-impl InstalledBackend {
+impl SpirvCodegenBackend {
     /// Creates a new [`SpirvBuilder`] configured to use this installed backend.
     #[expect(
         clippy::unreachable,
@@ -95,26 +94,7 @@ impl InstalledBackend {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 #[cfg_attr(feature = "clap", derive(clap::Parser))]
 #[non_exhaustive]
-pub struct Install {
-    /// Directory containing the shader crate to compile.
-    #[cfg_attr(
-        feature = "clap",
-        clap(long, alias("package"), short_alias('p'), default_value = "./")
-    )]
-    #[serde(alias = "package")]
-    pub shader_crate: PathBuf,
-
-    /// Parameters of the codegen backend installation.
-    #[cfg_attr(feature = "clap", clap(flatten))]
-    #[serde(flatten)]
-    pub params: InstallParams,
-}
-
-/// Parameters of the codegen backend installation.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-#[cfg_attr(feature = "clap", derive(clap::Parser))]
-#[non_exhaustive]
-pub struct InstallParams {
+pub struct SpirvCodegenBackendInstaller {
     #[expect(
         rustdoc::bare_urls,
         clippy::doc_markdown,
@@ -145,7 +125,7 @@ pub struct InstallParams {
     pub clear_target: bool,
 }
 
-impl Default for InstallParams {
+impl Default for SpirvCodegenBackendInstaller {
     #[inline]
     fn default() -> Self {
         Self {
@@ -157,34 +137,58 @@ impl Default for InstallParams {
     }
 }
 
-impl Install {
-    /// Creates an installation settings for a shader crate of the given path
-    /// and the given parameters.
+impl SpirvCodegenBackendInstaller {
+    /// Sets the source of [`spirv-builder`](spirv_builder) dependency.
     #[inline]
     #[must_use]
-    pub fn new<C, P>(shader_crate: C, params: P) -> Self
+    pub fn spirv_builder_source<I>(self, spirv_builder_source: I) -> Self
     where
-        C: Into<PathBuf>,
-        P: Into<InstallParams>,
+        I: Into<Option<String>>,
     {
         Self {
-            shader_crate: shader_crate.into(),
-            params: params.into(),
+            spirv_builder_source: spirv_builder_source.into(),
+            ..self
         }
     }
 
-    /// Creates a default installation settings for a shader crate of the given path.
+    /// Sets the version of [`spirv-builder`](spirv_builder) dependency.
     #[inline]
     #[must_use]
-    pub fn from_shader_crate<C>(shader_crate: C) -> Self
+    pub fn spirv_builder_version<I>(self, spirv_builder_version: I) -> Self
     where
-        C: Into<PathBuf>,
+        I: Into<Option<String>>,
     {
-        Self::new(shader_crate.into(), InstallParams::default())
+        Self {
+            spirv_builder_version: spirv_builder_version.into(),
+            ..self
+        }
+    }
+
+    /// Sets whether to force `rustc_codegen_spirv` to be rebuilt.
+    #[inline]
+    #[must_use]
+    pub fn rebuild_codegen(self, rebuild_codegen: bool) -> Self {
+        Self {
+            rebuild_codegen,
+            ..self
+        }
+    }
+
+    /// Sets whether to clear target dir of `rustc_codegen_spirv` build after a successful build.
+    #[inline]
+    #[must_use]
+    pub fn clear_target(self, clear_target: bool) -> Self {
+        Self {
+            clear_target,
+            ..self
+        }
     }
 
     /// Create the `rustc_codegen_spirv_dummy` crate that depends on `rustc_codegen_spirv`
-    fn write_source_files<E>(source: &SpirvSource, checkout: &Path) -> Result<(), InstallError<E>> {
+    fn write_source_files<E>(
+        source: &SpirvSource,
+        checkout: &Path,
+    ) -> Result<(), SpirvCodegenBackendInstallError<E>> {
         // skip writing a dummy project if we use a local rust-gpu checkout
         if source.is_path() {
             return Ok(());
@@ -197,50 +201,31 @@ impl Install {
 
         log::trace!("writing dummy lib.rs");
         let src = checkout.join("src");
-        fs::create_dir_all(&src).map_err(InstallError::CreateDummySrcDir)?;
-        fs::File::create(src.join("lib.rs")).map_err(InstallError::CreateDummyLibRs)?;
+        fs::create_dir_all(&src).map_err(SpirvCodegenBackendInstallError::CreateDummySrcDir)?;
+        fs::File::create(src.join("lib.rs"))
+            .map_err(SpirvCodegenBackendInstallError::CreateDummyLibRs)?;
 
         log::trace!("writing dummy Cargo.toml");
-
-        /// Contents of the `Cargo.toml` file for the local `rustc_codegen_spirv_dummy` crate.
-        #[expect(clippy::items_after_statements, reason = "local constant")]
-        const DUMMY_CARGO_TOML: &str = include_str!("dummy/Cargo.toml");
-
-        let version_spec = match &source {
-            SpirvSource::CratesIO(version) => format!("version = \"{version}\""),
-            SpirvSource::Git { url, rev } => format!("git = \"{url}\"\nrev = \"{rev}\""),
-            SpirvSource::Path {
-                rust_gpu_repo_root,
-                version,
-            } => {
-                // this branch is currently unreachable, as we just build `rustc_codegen_spirv` directly,
-                // since we don't need the `dummy` crate to make cargo download it for us
-                let mut new_path = rust_gpu_repo_root.to_owned();
-                new_path.push("crates/spirv-builder");
-                format!("path = \"{new_path}\"\nversion = \"{version}\"")
-            }
-        };
-
-        let cargo_toml = format!("{DUMMY_CARGO_TOML}{version_spec}\n");
-        fs::write(checkout.join("Cargo.toml"), cargo_toml)
-            .map_err(InstallError::WriteDummyCargoToml)?;
+        fs::write(checkout.join("Cargo.toml"), dummy_cargo_toml(source))
+            .map_err(SpirvCodegenBackendInstallError::WriteDummyCargoToml)?;
 
         Ok(())
     }
 
-    /// Installs the binary pair and return the [`InstalledBackend`],
+    /// Installs the binary pair and return the [`SpirvCodegenBackend`],
     /// from which you can create [`SpirvBuilder`] instances.
     ///
     /// # Errors
     ///
     /// Returns an error if the installation somehow fails.
-    /// See [`InstallError`] for further details.
+    /// See [`SpirvCodegenBackendInstallError`] for further details.
     #[inline]
-    pub fn run<R, W, T, C, O, E>(
+    pub fn install<I, R, W, T, C, O, E>(
         &self,
-        params: InstallRunParams<W, T, C, O, E>,
-    ) -> Result<InstalledBackend, InstallError<R>>
+        params: I,
+    ) -> Result<SpirvCodegenBackend, SpirvCodegenBackendInstallError<R>>
     where
+        I: Into<SpirvCodegenBackendInstallParams<W, T, C, O, E>>,
         W: io::Write,
         R: From<CommandExecError>,
         T: FnOnce(&str) -> Result<(), R>,
@@ -252,13 +237,20 @@ impl Install {
         let cache_dir = cache_dir()?;
         log::info!("cache directory is '{}'", cache_dir.display());
         if let Err(source) = fs::create_dir_all(&cache_dir) {
-            return Err(InstallError::CreateCacheDir { cache_dir, source });
+            return Err(SpirvCodegenBackendInstallError::CreateCacheDir { cache_dir, source });
         }
 
+        let SpirvCodegenBackendInstallParams {
+            shader_crate,
+            writer,
+            halt,
+            stdio_cfg,
+        } = params.into();
+
         let source = SpirvSource::new(
-            &self.shader_crate,
-            self.params.spirv_builder_source.as_deref(),
-            self.params.spirv_builder_version.as_deref(),
+            &shader_crate,
+            self.spirv_builder_source.as_deref(),
+            self.spirv_builder_version.as_deref(),
         )?;
         let install_dir = source.install_dir()?;
 
@@ -280,10 +272,7 @@ impl Install {
             if artifacts_found {
                 log::info!("cargo-gpu artifacts found in '{}'", install_dir.display());
             }
-            (
-                dest_dylib_path,
-                artifacts_found && !self.params.rebuild_codegen,
-            )
+            (dest_dylib_path, artifacts_found && !self.rebuild_codegen)
         };
 
         if skip_rebuild {
@@ -303,22 +292,19 @@ impl Install {
         let target_spec_dir = update_target_specs_files(&source, &dummy_metadata, !skip_rebuild)?;
 
         log::debug!("ensure_toolchain_and_components_exist");
-        ensure_toolchain_installation(&toolchain_channel, params.halt, params.stdio_cfg)
-            .map_err(InstallError::EnsureToolchainInstallation)?;
+        ensure_toolchain_installation(&toolchain_channel, halt, stdio_cfg)
+            .map_err(SpirvCodegenBackendInstallError::EnsureToolchainInstallation)?;
 
         if !skip_rebuild {
             // to prevent unsupported version errors when using older toolchains
             if !source.is_path() {
                 log::debug!("remove Cargo.lock");
                 fs::remove_file(install_dir.join("Cargo.lock"))
-                    .map_err(InstallError::RemoveDummyCargoLock)?;
+                    .map_err(SpirvCodegenBackendInstallError::RemoveDummyCargoLock)?;
             }
 
-            user_output!(
-                params.writer,
-                "Compiling `rustc_codegen_spirv` from {source}\n"
-            )
-            .map_err(InstallError::IoWrite)?;
+            user_output!(writer, "Compiling `rustc_codegen_spirv` from {source}\n")
+                .map_err(SpirvCodegenBackendInstallError::IoWrite)?;
 
             let mut cargo = CargoCmd::new();
             cargo
@@ -339,21 +325,22 @@ impl Install {
                 log::info!("successfully built {}", dylib_path.display());
                 if !source.is_path() {
                     fs::rename(&dylib_path, &dest_dylib_path)
-                        .map_err(InstallError::MoveRustcCodegenSpirvDylib)?;
+                        .map_err(SpirvCodegenBackendInstallError::MoveRustcCodegenSpirvDylib)?;
 
-                    if self.params.clear_target {
+                    if self.clear_target {
                         log::warn!("clearing target dir {}", target.display());
-                        fs::remove_dir_all(&target)
-                            .map_err(InstallError::RemoveRustcCodegenSpirvTargetDir)?;
+                        fs::remove_dir_all(&target).map_err(
+                            SpirvCodegenBackendInstallError::RemoveRustcCodegenSpirvTargetDir,
+                        )?;
                     }
                 }
             } else {
                 log::error!("could not find {}", dylib_path.display());
-                return Err(InstallError::RustcCodegenSpirvDylibNotFound);
+                return Err(SpirvCodegenBackendInstallError::RustcCodegenSpirvDylibNotFound);
             }
         }
 
-        Ok(InstalledBackend {
+        Ok(SpirvCodegenBackend {
             rustc_codegen_spirv_location: dest_dylib_path,
             toolchain_channel,
             target_spec_dir,
@@ -361,10 +348,12 @@ impl Install {
     }
 }
 
-/// Parameters for [`Install::run()`].
-#[derive(Debug, Clone, Copy)]
+/// Parameters for [`SpirvCodegenBackendInstaller::install()`].
+#[derive(Debug, Clone)]
 #[non_exhaustive]
-pub struct InstallRunParams<W, T, C, O, E> {
+pub struct SpirvCodegenBackendInstallParams<W, T, C, O, E> {
+    /// Path to the shader crate to install the codegen backend for.
+    pub shader_crate: PathBuf,
     /// Writer of user output.
     pub writer: W,
     /// Callbacks to halt toolchain installation.
@@ -373,12 +362,26 @@ pub struct InstallRunParams<W, T, C, O, E> {
     pub stdio_cfg: StdioCfg<O, E>,
 }
 
-impl<W, T, C, O, E> InstallRunParams<W, T, C, O, E> {
+impl<W, T, C, O, E> SpirvCodegenBackendInstallParams<W, T, C, O, E> {
+    /// Replaces path to the shader crate to install the codegen backend for.
+    #[inline]
+    #[must_use]
+    pub fn shader_crate<P>(self, shader_crate: P) -> Self
+    where
+        P: Into<PathBuf>,
+    {
+        Self {
+            shader_crate: shader_crate.into(),
+            ..self
+        }
+    }
+
     /// Replaces the writer of user output.
     #[inline]
     #[must_use]
-    pub fn writer<NW>(self, writer: NW) -> InstallRunParams<NW, T, C, O, E> {
-        InstallRunParams {
+    pub fn writer<NW>(self, writer: NW) -> SpirvCodegenBackendInstallParams<NW, T, C, O, E> {
+        SpirvCodegenBackendInstallParams {
+            shader_crate: self.shader_crate,
             writer,
             halt: self.halt,
             stdio_cfg: self.stdio_cfg,
@@ -391,8 +394,9 @@ impl<W, T, C, O, E> InstallRunParams<W, T, C, O, E> {
     pub fn halt<NT, NC>(
         self,
         halt: HaltToolchainInstallation<NT, NC>,
-    ) -> InstallRunParams<W, NT, NC, O, E> {
-        InstallRunParams {
+    ) -> SpirvCodegenBackendInstallParams<W, NT, NC, O, E> {
+        SpirvCodegenBackendInstallParams {
+            shader_crate: self.shader_crate,
             writer: self.writer,
             halt,
             stdio_cfg: self.stdio_cfg,
@@ -405,8 +409,9 @@ impl<W, T, C, O, E> InstallRunParams<W, T, C, O, E> {
     pub fn stdio_cfg<NO, NE>(
         self,
         stdio_cfg: StdioCfg<NO, NE>,
-    ) -> InstallRunParams<W, T, C, NO, NE> {
-        InstallRunParams {
+    ) -> SpirvCodegenBackendInstallParams<W, T, C, NO, NE> {
+        SpirvCodegenBackendInstallParams {
+            shader_crate: self.shader_crate,
             writer: self.writer,
             halt: self.halt,
             stdio_cfg,
@@ -414,8 +419,8 @@ impl<W, T, C, O, E> InstallRunParams<W, T, C, O, E> {
     }
 }
 
-/// [`Default`] parameters for [`Install::run()`].
-type DefaultInstallRunParams = InstallRunParams<
+/// [`Default`] parameters for [`SpirvCodegenBackendInstaller::install()`].
+pub type DefaultSpirvCodegenBackendInstallParams = SpirvCodegenBackendInstallParams<
     io::Empty,
     NoopOnToolchainInstall,
     NoopOnComponentsInstall,
@@ -423,10 +428,14 @@ type DefaultInstallRunParams = InstallRunParams<
     NullStderr,
 >;
 
-impl Default for DefaultInstallRunParams {
+impl<P> From<P> for DefaultSpirvCodegenBackendInstallParams
+where
+    P: Into<PathBuf>,
+{
     #[inline]
-    fn default() -> Self {
+    fn from(path_to_crate: P) -> Self {
         Self {
+            shader_crate: path_to_crate.into(),
             writer: io::empty(),
             halt: HaltToolchainInstallation::noop(),
             stdio_cfg: StdioCfg::null(),
@@ -443,10 +452,32 @@ fn dylib_filename(name: impl AsRef<str>) -> String {
     format!("{DLL_PREFIX}{str_name}{DLL_SUFFIX}")
 }
 
+/// Contents of the `Cargo.toml` file for the local `rustc_codegen_spirv_dummy` crate
+/// without the version specification of the `rustc_codegen_spirv` dependency.
+const DUMMY_CARGO_TOML_NO_VERSION_SPEC: &str = include_str!("dummy/Cargo.toml");
+
+/// Returns the contents of the `Cargo.toml` file for the local `rustc_codegen_spirv_dummy` crate.
+fn dummy_cargo_toml(source: &SpirvSource) -> String {
+    let version_spec = match source {
+        SpirvSource::CratesIO(version) => format!("version = \"{version}\""),
+        SpirvSource::Git { url, rev } => format!("git = \"{url}\"\nrev = \"{rev}\""),
+        SpirvSource::Path {
+            rust_gpu_repo_root,
+            version,
+        } => {
+            // this branch is currently unreachable, as we just build `rustc_codegen_spirv` directly,
+            // since we don't need the `dummy` crate to make cargo download it for us
+            let new_path = rust_gpu_repo_root.join("crates").join("spirv-builder");
+            format!("path = \"{new_path}\"\nversion = \"{version}\"")
+        }
+    };
+    format!("{DUMMY_CARGO_TOML_NO_VERSION_SPEC}{version_spec}\n")
+}
+
 /// An error indicating codegen `rustc_codegen_spirv` installation failure.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum InstallError<E = CommandExecError> {
+pub enum SpirvCodegenBackendInstallError<E = CommandExecError> {
     /// Failed to write user output.
     #[error("failed to write user output: {0}")]
     IoWrite(#[source] io::Error),

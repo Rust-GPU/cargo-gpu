@@ -125,7 +125,6 @@ dependencies = [
  "dunce",
  "log",
  "rustc_codegen_spirv-cache",
- "semver",
  "thiserror",
 ]
 

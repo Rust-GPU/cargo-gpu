@@ -1,6 +1,6 @@
 //! Get config from the shader crate's `Cargo.toml` `[*.metadata.rust-gpu.*]`
 
-use cargo_metadata::MetadataCommand;
+use cargo_gpu_build::spirv_cache::cargo_metadata::{self, MetadataCommand};
 use serde_json::Value;
 
 /// `Metadata` refers to the `[metadata.*]` section of `Cargo.toml` that `cargo` formally

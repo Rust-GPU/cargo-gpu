@@ -11,7 +11,6 @@ license.workspace = true
 rustc_codegen_spirv-cache = { path = "../rustc_codegen_spirv-cache" }
 dunce.workspace = true
 thiserror.workspace = true
-semver.workspace = true
 log.workspace = true
 
 [features]

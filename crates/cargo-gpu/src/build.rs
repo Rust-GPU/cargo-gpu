@@ -5,12 +5,11 @@ use std::{io::Write as _, panic, path::PathBuf};
 
 use anyhow::Context as _;
 use cargo_gpu_build::{
-    build::{ShaderCrateBuilder, ShaderCrateBuilderParams},
+    build::{CargoGpuBuilder, CargoGpuBuilderParams},
     spirv_builder::{CompileResult, ModuleResult, SpirvBuilder},
-    spirv_cache::backend::Install,
 };
 
-use crate::{linkage::Linkage, user_consent::ask_for_user_consent};
+use crate::{install::Install, linkage::Linkage, user_consent::ask_for_user_consent};
 
 /// Args for just a build.
 #[derive(Debug, Clone, clap::Parser, serde::Deserialize, serde::Serialize)]
@@ -47,51 +46,13 @@ impl Default for BuildArgs {
     }
 }
 
-/// Args for just an install.
-#[derive(Clone, Debug, clap::Parser, serde::Deserialize, serde::Serialize)]
-#[non_exhaustive]
-pub struct InstallArgs {
-    /// The flattened [`Install`].
-    #[clap(flatten)]
-    #[serde(flatten)]
-    pub backend: Install,
-
-    /// There is a tricky situation where a shader crate that depends on workspace config can have
-    /// a different `Cargo.lock` lockfile version from the the workspace's `Cargo.lock`. This can
-    /// prevent builds when an old Rust toolchain doesn't recognise the newer lockfile version.
-    ///
-    /// The ideal way to resolve this would be to match the shader crate's toolchain with the
-    /// workspace's toolchain. However, that is not always possible. Another solution is to
-    /// `exclude = [...]` the problematic shader crate from the workspace. This also may not be a
-    /// suitable solution if there are a number of shader crates all sharing similar config and
-    /// you don't want to have to copy/paste and maintain that config across all the shaders.
-    ///
-    /// So a somewhat hacky workaround is to overwrite lockfile versions. Enabling this flag
-    /// will only come into effect if there are a mix of v3/v4 lockfiles. It will also
-    /// only overwrite versions for the duration of a build. It will attempt to return the versions
-    /// to their original values once the build is finished. However, of course, unexpected errors
-    /// can occur and the overwritten values can remain. Hence why this behaviour is not enabled by
-    /// default.
-    ///
-    /// This hack is possible because the change from v3 to v4 only involves a minor change to the
-    /// way source URLs are encoded. See these PRs for more details:
-    ///   * <https://github.com/rust-lang/cargo/pull/12280>
-    ///   * <https://github.com/rust-lang/cargo/pull/14595>
-    #[clap(long, action, verbatim_doc_comment)]
-    pub force_overwrite_lockfiles_v4_to_v3: bool,
-
-    /// Assume "yes" to "Install Rust toolchain: [y/n]" prompt.
-    #[clap(long, action)]
-    pub auto_install_rust_toolchain: bool,
-}
-
-/// `cargo build` subcommands
+/// `cargo build` subcommands.
 #[derive(Clone, Debug, clap::Parser, serde::Deserialize, serde::Serialize)]
 #[non_exhaustive]
 pub struct Build {
     /// CLI args for install the `rust-gpu` compiler and components.
     #[clap(flatten)]
-    pub install: InstallArgs,
+    pub install: Install,
 
     /// CLI args for configuring the build of the shader.
     #[clap(flatten)]
@@ -106,16 +67,16 @@ impl Build {
     /// Returns an error if the build process fails somehow.
     #[inline]
     pub fn run(&mut self) -> anyhow::Result<()> {
-        self.build.spirv_builder.path_to_crate = Some(self.install.backend.shader_crate.clone());
+        self.build.spirv_builder.path_to_crate = Some(self.install.shader_crate.clone());
 
         let halt = ask_for_user_consent(self.install.auto_install_rust_toolchain);
-        let crate_builder_params = ShaderCrateBuilderParams::from(self.build.spirv_builder.clone())
-            .install(self.install.backend.params.clone())
+        let crate_builder_params = CargoGpuBuilderParams::from(self.build.spirv_builder.clone())
+            .install(self.install.spirv_installer.clone())
             .force_overwrite_lockfiles_v4_to_v3(self.install.force_overwrite_lockfiles_v4_to_v3)
             .halt(halt);
-        let crate_builder = ShaderCrateBuilder::new(crate_builder_params)?;
+        let crate_builder = CargoGpuBuilder::new(crate_builder_params)?;
 
-        self.install.backend = crate_builder.installed_backend_args.clone();
+        self.install.spirv_installer = crate_builder.installer.clone();
         self.build.spirv_builder = crate_builder.builder.clone();
 
         // Ensure the shader output dir exists
@@ -135,15 +96,15 @@ impl Build {
         self.build(crate_builder)
     }
 
-    /// Builds shader crate using [`ShaderCrateBuilder`].
-    fn build(&self, mut crate_builder: ShaderCrateBuilder) -> anyhow::Result<()> {
+    /// Builds shader crate using [`CargoGpuBuilder`].
+    fn build(&self, mut crate_builder: CargoGpuBuilder) -> anyhow::Result<()> {
         let result = crate_builder.build()?;
         self.parse_compilation_result(&result)?;
         Ok(())
     }
 
-    /// Watches shader crate for changes using [`ShaderCrateBuilder`].
-    fn watch(&self, mut crate_builder: ShaderCrateBuilder) -> anyhow::Result<Infallible> {
+    /// Watches shader crate for changes using [`CargoGpuBuilder`].
+    fn watch(&self, mut crate_builder: CargoGpuBuilder) -> anyhow::Result<Infallible> {
         let this = self.clone();
         let mut watcher = crate_builder.watch()?;
         let watch_thread = std::thread::spawn(move || -> ! {
@@ -196,10 +157,10 @@ impl Build {
                 log::debug!(
                     "linkage of {} relative to {}",
                     path.display(),
-                    self.install.backend.shader_crate.display()
+                    self.install.shader_crate.display()
                 );
                 let spv_path = path
-                    .relative_to(&self.install.backend.shader_crate)
+                    .relative_to(&self.install.shader_crate)
                     .map_or(path, |path_relative_to_shader_crate| {
                         path_relative_to_shader_crate.to_path("")
                     });
@@ -255,7 +216,7 @@ mod test {
             command: Command::Build(build),
         } = Cli::parse_from(args)
         {
-            assert_eq!(shader_crate_path, build.install.backend.shader_crate);
+            assert_eq!(shader_crate_path, build.install.shader_crate);
             assert_eq!(output_dir, build.build.output_dir);
 
             // TODO:
