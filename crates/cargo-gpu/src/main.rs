@@ -1,4 +1,5 @@
-//! main executable of cargo gpu
+//! The main executable of `cargo-gpu`.
+
 use cargo_gpu::Cli;
 use clap::Parser as _;
 
@@ -36,6 +37,7 @@ fn run() -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>();
     log::trace!("CLI args: {env_args:#?}");
-    let cli = Cli::parse_from(&env_args);
-    cli.command.run(env_args)
+
+    let cli = Cli::parse_from(env_args);
+    cli.command.run()
 }

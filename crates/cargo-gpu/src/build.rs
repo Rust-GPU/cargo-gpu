@@ -1,7 +1,12 @@
 //! `cargo gpu build`, analogous to `cargo build`
 
 use core::convert::Infallible;
-use std::{io::Write as _, panic, path::PathBuf};
+use std::{
+    io::Write as _,
+    panic,
+    path::{Path, PathBuf},
+    thread,
+};
 
 use anyhow::Context as _;
 use cargo_gpu_build::{
@@ -9,7 +14,12 @@ use cargo_gpu_build::{
     spirv_builder::{CompileResult, ModuleResult, SpirvBuilder},
 };
 
-use crate::{install::Install, linkage::Linkage, user_consent::ask_for_user_consent};
+use crate::{
+    install::InstallArgs,
+    linkage::Linkage,
+    metadata::{CargoMetadata, CargoMetadataSource},
+    user_consent::ask_for_user_consent,
+};
 
 /// Args for just a build.
 #[derive(Debug, Clone, clap::Parser, serde::Deserialize, serde::Serialize)]
@@ -47,12 +57,12 @@ impl Default for BuildArgs {
 }
 
 /// `cargo build` subcommands.
-#[derive(Clone, Debug, clap::Parser, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Default, clap::Parser, serde::Deserialize, serde::Serialize)]
 #[non_exhaustive]
 pub struct Build {
     /// CLI args for install the `rust-gpu` compiler and components.
     #[clap(flatten)]
-    pub install: Install,
+    pub install: InstallArgs,
 
     /// CLI args for configuring the build of the shader.
     #[clap(flatten)]
@@ -107,7 +117,7 @@ impl Build {
     fn watch(&self, mut crate_builder: CargoGpuBuilder) -> anyhow::Result<Infallible> {
         let this = self.clone();
         let mut watcher = crate_builder.watch()?;
-        let watch_thread = std::thread::spawn(move || -> ! {
+        let watch_thread = thread::spawn(move || -> ! {
             loop {
                 let compile_result = match watcher.recv() {
                     Ok(compile_result) => compile_result,
@@ -191,26 +201,51 @@ impl Build {
     }
 }
 
+impl CargoMetadata for Build {
+    fn patch(&mut self, shader_crate: &Path, source: CargoMetadataSource<'_>) {
+        let CargoMetadataSource::Crate(_) = source else {
+            return;
+        };
+
+        let output_dir = self.build.output_dir.as_path();
+        log::debug!(
+            "found output dir path in crate metadata: {}",
+            output_dir.display()
+        );
+
+        let new_output_dir = shader_crate.join(output_dir);
+        log::debug!(
+            "setting that to be relative to the Cargo.toml it was found in: {}",
+            new_output_dir.display()
+        );
+
+        self.build.output_dir = new_output_dir;
+    }
+}
+
 #[cfg(test)]
 mod test {
     use clap::Parser as _;
 
-    use crate::{Cli, Command};
+    use crate::{
+        test::{shader_crate_template_path, tests_teardown},
+        Cli, Command,
+    };
 
     #[test_log::test]
     fn builder_from_params() {
-        crate::test::tests_teardown();
+        tests_teardown();
 
-        let shader_crate_path = crate::test::shader_crate_template_path();
+        let shader_crate_path = shader_crate_template_path();
         let output_dir = shader_crate_path.join("shaders");
 
         let args = [
-            "target/debug/cargo-gpu",
-            "build",
-            "--shader-crate",
-            &format!("{}", shader_crate_path.display()),
-            "--output-dir",
-            &format!("{}", output_dir.display()),
+            "target/debug/cargo-gpu".as_ref(),
+            "build".as_ref(),
+            "--shader-crate".as_ref(),
+            shader_crate_path.as_os_str(),
+            "--output-dir".as_ref(),
+            output_dir.as_os_str(),
         ];
         if let Cli {
             command: Command::Build(build),

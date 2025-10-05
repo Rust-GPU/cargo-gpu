@@ -26,7 +26,6 @@ dunce.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 test-log.workspace = true
-cargo_metadata = { workspace = true, features = ["builder"] }
 
 [lints]
 workspace = true

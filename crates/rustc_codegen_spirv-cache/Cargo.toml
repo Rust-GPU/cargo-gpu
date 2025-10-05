@@ -20,6 +20,7 @@ clap = { workspace = true, optional = true }
 [dev-dependencies]
 test-log.workspace = true
 cargo-util-schemas.workspace = true
+cargo_metadata = { workspace = true, features = ["builder"] }
 
 [features]
 # Enables `clap` support for public structs

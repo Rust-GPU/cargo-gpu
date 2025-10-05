@@ -1,22 +1,34 @@
 //! `cargo gpu install`
 
-use std::path::PathBuf;
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
-use cargo_gpu_build::spirv_cache::backend::SpirvCodegenBackendInstaller;
+use cargo_gpu_build::spirv_cache::{
+    backend::{SpirvCodegenBackendInstallParams, SpirvCodegenBackendInstaller},
+    toolchain::StdioCfg,
+};
 
-/// `cargo gpu install` subcommands.
+use crate::{
+    metadata::{CargoMetadata, CargoMetadataSource},
+    user_consent::ask_for_user_consent,
+};
+
+/// Arguments for just an install.
 #[derive(Clone, Debug, clap::Parser, serde::Deserialize, serde::Serialize)]
 #[non_exhaustive]
-pub struct Install {
-    /// The flattened [`SpirvCodegenBackendInstaller`].
-    #[clap(flatten)]
-    #[serde(flatten)]
-    pub spirv_installer: SpirvCodegenBackendInstaller,
-
+#[expect(clippy::module_name_repetitions, reason = "it is intended")]
+pub struct InstallArgs {
     /// Directory containing the shader crate to compile.
     #[clap(long, alias("package"), short_alias('p'), default_value = "./")]
     #[serde(alias = "package")]
     pub shader_crate: PathBuf,
+
+    /// The flattened [`SpirvCodegenBackendInstaller`].
+    #[clap(flatten)]
+    #[serde(flatten)]
+    pub spirv_installer: SpirvCodegenBackendInstaller,
 
     /// There is a tricky situation where a shader crate that depends on workspace config can have
     /// a different `Cargo.lock` lockfile version from the the workspace's `Cargo.lock`. This can
@@ -45,4 +57,48 @@ pub struct Install {
     /// Assume "yes" to "Install Rust toolchain: [y/n]" prompt.
     #[clap(long, action)]
     pub auto_install_rust_toolchain: bool,
+}
+
+impl Default for InstallArgs {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            shader_crate: PathBuf::from("./"),
+            spirv_installer: SpirvCodegenBackendInstaller::default(),
+            force_overwrite_lockfiles_v4_to_v3: false,
+            auto_install_rust_toolchain: false,
+        }
+    }
+}
+
+/// `cargo gpu install` subcommands.
+#[derive(Clone, Debug, Default, clap::Parser, serde::Deserialize, serde::Serialize)]
+#[non_exhaustive]
+pub struct Install {
+    /// The flattened [`InstallArgs`].
+    #[clap(flatten)]
+    pub install: InstallArgs,
+}
+
+impl Install {
+    /// Install the `rust-gpu` codegen backend for the shader crate.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the build process fails somehow.
+    #[inline]
+    pub fn run(&self) -> anyhow::Result<()> {
+        let skip_consent = self.install.auto_install_rust_toolchain;
+        let halt = ask_for_user_consent(skip_consent);
+        let install_params = SpirvCodegenBackendInstallParams::from(&self.install.shader_crate)
+            .writer(io::stdout())
+            .halt(halt)
+            .stdio_cfg(StdioCfg::inherit());
+        self.install.spirv_installer.install(install_params)?;
+        Ok(())
+    }
+}
+
+impl CargoMetadata for Install {
+    fn patch(&mut self, _shader_crate: &Path, _source: CargoMetadataSource<'_>) {}
 }

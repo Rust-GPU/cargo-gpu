@@ -23,12 +23,8 @@
 pub use cargo_gpu_build::{spirv_builder, spirv_cache};
 
 use self::{
-    build::Build,
-    dump_usage::dump_full_usage_for_readme,
-    install::Install,
-    show::Show,
-    spirv_cache::{backend::SpirvCodegenBackendInstallParams, toolchain::StdioCfg},
-    user_consent::ask_for_user_consent,
+    build::Build, config::from_cargo_metadata_with_config, dump_usage::dump_full_usage_for_readme,
+    install::Install, show::Show,
 };
 
 pub mod build;
@@ -38,15 +34,10 @@ pub mod show;
 mod config;
 mod dump_usage;
 mod linkage;
+mod merge;
 mod metadata;
 mod test;
 mod user_consent;
-
-/// Central function to write to the user.
-#[macro_export]
-macro_rules! user_output {
-    ($($args: tt)*) => { $crate::spirv_cache::user_output!(::std::io::stdout(), $($args)*) };
-}
 
 /// All of the available subcommands for `cargo gpu`.
 #[derive(clap::Subcommand)]
@@ -76,29 +67,18 @@ impl Command {
     ///
     /// Any errors during execution, usually printed to the user.
     #[inline]
-    pub fn run(&self, env_args: Vec<String>) -> anyhow::Result<()> {
+    pub fn run(&self) -> anyhow::Result<()> {
         match &self {
             Self::Install(install) => {
-                let shader_crate = &install.shader_crate;
-                let command =
-                    config::Config::clap_command_with_cargo_config(shader_crate, env_args)?;
-                log::debug!(
-                    "installing with final merged arguments: {:#?}",
-                    command.install
-                );
+                let shader_crate = &install.install.shader_crate;
+                let command = from_cargo_metadata_with_config(shader_crate, install.as_ref())?;
+                log::debug!("installing with final merged arguments: {command:#?}");
 
-                let skip_consent = command.install.auto_install_rust_toolchain;
-                let halt = ask_for_user_consent(skip_consent);
-                let install_params = SpirvCodegenBackendInstallParams::from(shader_crate)
-                    .writer(std::io::stdout())
-                    .halt(halt)
-                    .stdio_cfg(StdioCfg::inherit());
-                command.install.spirv_installer.install(install_params)?;
+                command.run()?;
             }
             Self::Build(build) => {
                 let shader_crate = &build.install.shader_crate;
-                let mut command =
-                    config::Config::clap_command_with_cargo_config(shader_crate, env_args)?;
+                let mut command = from_cargo_metadata_with_config(shader_crate, build.as_ref())?;
                 log::debug!("building with final merged arguments: {command:#?}");
 
                 // When watching, do one normal run to setup the `manifest.json` file.

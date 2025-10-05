@@ -212,7 +212,7 @@ impl SpirvCodegenBackendInstaller {
         Ok(())
     }
 
-    /// Installs the binary pair and return the [`SpirvCodegenBackend`],
+    /// Installs the `rust-gpu` [codegen backend](SpirvCodegenBackend) for the shader crate,
     /// from which you can create [`SpirvBuilder`] instances.
     ///
     /// # Errors
