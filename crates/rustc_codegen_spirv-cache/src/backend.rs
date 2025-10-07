@@ -22,7 +22,7 @@ use std::{
 use crate::{
     cache::{cache_dir, CacheDirError},
     command::{execute_command, CommandExecError},
-    metadata::{query_metadata, MetadataExt as _, MissingPackageError, QueryMetadataError},
+    metadata::{query_metadata, MetadataExt as _, PackageByNameError, QueryMetadataError},
     spirv_builder::{cargo_cmd::CargoCmd, SpirvBuilder, SpirvBuilderError},
     spirv_source::{
         rust_gpu_toolchain_channel, RustGpuToolchainChannelError, SpirvSource, SpirvSourceError,
@@ -284,14 +284,14 @@ impl SpirvCodegenBackendInstaller {
         // TODO cache toolchain channel in a file?
         log::debug!("resolving toolchain version to use");
         let dummy_metadata = query_metadata(&install_dir)?;
-        let rustc_codegen_spirv = dummy_metadata.find_package("rustc_codegen_spirv")?;
+        let rustc_codegen_spirv = dummy_metadata.package_by_name("rustc_codegen_spirv")?;
         let toolchain_channel = rust_gpu_toolchain_channel(rustc_codegen_spirv)?;
         log::info!("selected toolchain channel `{toolchain_channel:?}`");
 
-        log::debug!("Update target specs files");
+        log::debug!("updating target specs files");
         let target_spec_dir = update_target_specs_files(&source, &dummy_metadata, !skip_rebuild)?;
 
-        log::debug!("ensure_toolchain_and_components_exist");
+        log::debug!("ensuring toolchain and its components exist");
         ensure_toolchain_installation(&toolchain_channel, halt, stdio_cfg)
             .map_err(SpirvCodegenBackendInstallError::EnsureToolchainInstallation)?;
 
@@ -509,7 +509,7 @@ pub enum SpirvCodegenBackendInstallError<E = CommandExecError> {
     QueryDummyMetadata(#[from] QueryMetadataError),
     /// Could not find `rustc_codegen_spirv` dependency in the local `rustc_codegen_spirv_dummy` crate.
     #[error(transparent)]
-    NoRustcCodegenSpirv(#[from] MissingPackageError),
+    NoRustcCodegenSpirv(#[from] PackageByNameError),
     /// Failed to determine the toolchain channel of `rustc_codegen_spirv`.
     #[error("could not get toolchain channel of `rustc_codegen_spirv`: {0}")]
     RustGpuToolchainChannel(#[from] RustGpuToolchainChannelError),

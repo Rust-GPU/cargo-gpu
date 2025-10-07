@@ -68,13 +68,13 @@ impl LockfileMismatchHandler {
         })
     }
 
-    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](field@crate::build::CargoGpuBuilderParams::force_overwrite_lockfiles_v4_to_v3)
+    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](field@crate::build::CargoGpuInstallMetadata::force_overwrite_lockfiles_v4_to_v3)
     /// flag for why we do this.
     fn ensure_workspace_rust_version_does_not_conflict_with_shader(
         shader_crate_path: &Path,
         is_force_overwrite_lockfiles_v4_to_v3: bool,
     ) -> Result<Option<PathBuf>, LockfileMismatchError> {
-        log::debug!("Ensuring no v3/v4 `Cargo.lock` conflicts from workspace Rust...");
+        log::debug!("ensuring no v3/v4 `Cargo.lock` conflicts from workspace Rust...");
         let workspace_rust_version =
             query_rustc_version(None).map_err(LockfileMismatchError::QueryRustcVersion)?;
         if workspace_rust_version >= RUST_VERSION_THAT_USES_V4_CARGO_LOCKS {
@@ -96,14 +96,14 @@ impl LockfileMismatchHandler {
         }
     }
 
-    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](field@crate::build::CargoGpuBuilderParams::force_overwrite_lockfiles_v4_to_v3)
+    /// See docs for [`force_overwrite_lockfiles_v4_to_v3`](field@crate::build::CargoGpuInstallMetadata::force_overwrite_lockfiles_v4_to_v3)
     /// flag for why we do this.
     fn ensure_shader_rust_version_does_not_conflict_with_any_cargo_locks(
         shader_crate_path: &Path,
         channel: &str,
         is_force_overwrite_lockfiles_v4_to_v3: bool,
     ) -> Result<Option<PathBuf>, LockfileMismatchError> {
-        log::debug!("Ensuring no v3/v4 `Cargo.lock` conflicts from shader's Rust...");
+        log::debug!("ensuring no v3/v4 `Cargo.lock` conflicts from shader's Rust...");
         let shader_rust_version =
             query_rustc_version(Some(channel)).map_err(LockfileMismatchError::QueryRustcVersion)?;
         if shader_rust_version >= RUST_VERSION_THAT_USES_V4_CARGO_LOCKS {
@@ -229,7 +229,7 @@ impl LockfileMismatchHandler {
     #[inline]
     pub fn revert_cargo_lock_manifest_versions(&mut self) -> Result<(), LockfileMismatchError> {
         for offending_cargo_lock in &self.cargo_lock_files_with_changed_manifest_versions {
-            log::debug!("Reverting: {}", offending_cargo_lock.display());
+            log::debug!("reverting: {}", offending_cargo_lock.display());
             Self::replace_cargo_lock_manifest_version(offending_cargo_lock, "3", "4")?;
         }
         Ok(())
@@ -334,7 +334,7 @@ pub enum LockfileMismatchError {
     /// Conflicting lockfile manifest versions detected, with advice on how to resolve them
     /// by setting the [`force_overwrite_lockfiles_v4_to_v3`] flag.
     ///
-    /// [`force_overwrite_lockfiles_v4_to_v3`]: field@crate::build::CargoGpuBuilderParams::force_overwrite_lockfiles_v4_to_v3
+    /// [`force_overwrite_lockfiles_v4_to_v3`]: field@crate::build::CargoGpuInstallMetadata::force_overwrite_lockfiles_v4_to_v3
     #[error(
         r#"conflicting `Cargo.lock` versions detected ⚠️
 

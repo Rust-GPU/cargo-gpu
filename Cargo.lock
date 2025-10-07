@@ -111,7 +111,6 @@ dependencies = [
  "relative-path",
  "serde",
  "serde_json",
- "spirv-builder",
  "tempfile",
  "test-log",
  "thiserror",
@@ -121,9 +120,12 @@ dependencies = [
 name = "cargo-gpu-build"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "dunce",
  "log",
  "rustc_codegen_spirv-cache",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

@@ -124,7 +124,7 @@ pub fn update_target_specs_files(
     );
 
     let mut target_specs_dst = source.install_dir()?.join("target-specs");
-    if let Ok(target_specs) = metadata.find_package("rustc_codegen_spirv-target-specs") {
+    if let Ok(target_specs) = metadata.package_by_name("rustc_codegen_spirv-target-specs") {
         log::info!(
             "target-specs: found crate `rustc_codegen_spirv-target-specs` with manifest at `{}`",
             target_specs.manifest_path

@@ -15,27 +15,24 @@
 //!
 //! ## Where the binaries are
 //!
-//! Prebuilt binaries are stored in the [cache directory](spirv_cache::cache::cache_dir()),
+//! Prebuilt binaries are stored in the [cache directory](cargo_gpu_build::spirv_cache::cache::cache_dir()),
 //! which path differs by OS you are using.
 
 #![expect(clippy::pub_use, reason = "part of public API")]
 
-pub use cargo_gpu_build::{spirv_builder, spirv_cache};
+pub use cargo_gpu_build;
 
 use self::{
-    build::Build, config::from_cargo_metadata_with_config, dump_usage::dump_full_usage_for_readme,
-    install::Install, show::Show,
+    build::Build, cargo_gpu_build::metadata::with_shader_crate,
+    dump_usage::dump_full_usage_for_readme, install::Install, show::Show,
 };
 
 pub mod build;
 pub mod install;
 pub mod show;
 
-mod config;
 mod dump_usage;
 mod linkage;
-mod merge;
-mod metadata;
 mod test;
 mod user_consent;
 
@@ -71,14 +68,14 @@ impl Command {
         match &self {
             Self::Install(install) => {
                 let shader_crate = &install.install.shader_crate;
-                let command = from_cargo_metadata_with_config(shader_crate, install.as_ref())?;
+                let command = with_shader_crate(install.as_ref(), shader_crate)?;
                 log::debug!("installing with final merged arguments: {command:#?}");
 
                 command.run()?;
             }
             Self::Build(build) => {
                 let shader_crate = &build.install.shader_crate;
-                let mut command = from_cargo_metadata_with_config(shader_crate, build.as_ref())?;
+                let mut command = with_shader_crate(build.as_ref(), shader_crate)?;
                 log::debug!("building with final merged arguments: {command:#?}");
 
                 // When watching, do one normal run to setup the `manifest.json` file.

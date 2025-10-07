@@ -12,12 +12,15 @@ rustc_codegen_spirv-cache = { path = "../rustc_codegen_spirv-cache" }
 dunce.workspace = true
 thiserror.workspace = true
 log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap = { workspace = true, optional = true }
 
 [features]
 # Rebuilds target shader crate upon changes
 watch = ["rustc_codegen_spirv-cache/watch"]
 # Enables `clap` support for public structs
-clap = ["rustc_codegen_spirv-cache/clap"]
+clap = ["dep:clap", "rustc_codegen_spirv-cache/clap"]
 
 [lints]
 workspace = true

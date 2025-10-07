@@ -21,7 +21,7 @@ use cargo_metadata::{
 
 use crate::{
     cache::{cache_dir, CacheDirError},
-    metadata::{query_metadata, MetadataExt as _, MissingPackageError, QueryMetadataError},
+    metadata::{query_metadata, MetadataExt as _, PackageByNameError, QueryMetadataError},
 };
 
 #[expect(
@@ -119,7 +119,7 @@ impl SpirvSource {
         shader_crate_path: &Path,
     ) -> Result<Self, SpirvSourceError> {
         let crate_metadata = query_metadata(shader_crate_path)?;
-        let spirv_std_package = crate_metadata.find_package("spirv-std")?;
+        let spirv_std_package = crate_metadata.package_by_name("spirv-std")?;
         let spirv_source = Self::parse_spirv_std_source_and_version(spirv_std_package)?;
 
         log::debug!(
@@ -209,7 +209,7 @@ impl SpirvSource {
             }
         };
 
-        log::debug!("Parsed `rust-gpu` source and version: {result:?}");
+        log::debug!("parsed `rust-gpu` source and version: {result:?}");
         Ok(result)
     }
 }
@@ -224,7 +224,7 @@ pub enum SpirvSourceError {
     QueryMetadata(#[from] QueryMetadataError),
     /// The package was missing from the metadata.
     #[error(transparent)]
-    MissingPackage(#[from] MissingPackageError),
+    MissingPackage(#[from] PackageByNameError),
     /// Parsing the source and version of `spirv-std` crate from the package failed.
     #[error(transparent)]
     ParseSourceVersion(#[from] ParseSourceVersionError),
@@ -267,7 +267,7 @@ pub fn rust_gpu_toolchain_channel(
         .ok_or(RustGpuToolchainChannelError::ManifestAtRoot)?;
     let build_script = path.join("build.rs");
 
-    log::debug!("Parsing `build.rs` at {build_script:?} for the used toolchain");
+    log::debug!("parsing `build.rs` at {build_script:?} for the used toolchain");
     let contents = match fs::read_to_string(&build_script) {
         Ok(contents) => contents,
         Err(source) => {

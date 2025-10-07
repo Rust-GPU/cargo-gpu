@@ -19,3 +19,6 @@ pub use rustc_codegen_spirv_cache::spirv_builder;
 
 pub mod build;
 pub mod lockfile;
+pub mod metadata;
+
+mod merge;

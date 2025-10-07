@@ -1,10 +1,11 @@
 //! This module provides a `rust-gpu` shader crate builder
 //! usable inside of build scripts or as a part of CLI.
 
-use std::{io, process::Stdio};
+use std::{io, path::Path, process::Stdio};
 
 use crate::{
     lockfile::{LockfileMismatchError, LockfileMismatchHandler},
+    metadata::{RustGpuMetadata, RustGpuMetadataSource},
     spirv_builder::{CompileResult, SpirvBuilder, SpirvBuilderError},
     spirv_cache::{
         backend::{
@@ -23,14 +24,33 @@ use crate::{
 #[cfg(feature = "watch")]
 use crate::spirv_builder::SpirvWatcher;
 
-/// Parameters for [`CargoGpuBuilder::new()`].
-#[derive(Debug, Clone)]
+/// Metadata specific to the build process.
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 #[non_exhaustive]
-pub struct CargoGpuBuilderParams<W, T, C, O, E> {
-    /// Parameters of the shader crate build.
-    pub build: SpirvBuilder,
-    /// Parameters of the codegen backend installation for the shader crate.
-    pub install: SpirvCodegenBackendInstaller,
+pub struct CargoGpuBuildMetadata {
+    /// The flattened [`SpirvBuilder`].
+    #[cfg_attr(feature = "clap", clap(flatten))]
+    #[serde(flatten)]
+    pub spirv_builder: SpirvBuilder,
+}
+
+impl From<SpirvBuilder> for CargoGpuBuildMetadata {
+    #[inline]
+    fn from(spirv_builder: SpirvBuilder) -> Self {
+        Self { spirv_builder }
+    }
+}
+
+/// Metadata specific to the codegen backend installation process.
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
+#[non_exhaustive]
+pub struct CargoGpuInstallMetadata {
+    /// The flattened [`SpirvCodegenBackendInstaller`].
+    #[cfg_attr(feature = "clap", clap(flatten))]
+    #[serde(flatten)]
+    pub spirv_installer: SpirvCodegenBackendInstaller,
     /// There is a tricky situation where a shader crate that depends on workspace config can have
     /// a different `Cargo.lock` lockfile version from the the workspace's `Cargo.lock`. This can
     /// prevent builds when an old Rust toolchain doesn't recognise the newer lockfile version.
@@ -52,7 +72,38 @@ pub struct CargoGpuBuilderParams<W, T, C, O, E> {
     /// way source URLs are encoded. See these PRs for more details:
     ///   * <https://github.com/rust-lang/cargo/pull/12280>
     ///   * <https://github.com/rust-lang/cargo/pull/14595>
+    #[cfg_attr(feature = "clap", clap(long, action, verbatim_doc_comment))]
     pub force_overwrite_lockfiles_v4_to_v3: bool,
+}
+
+/// Metadata for both shader crate build and codegen backend installation.
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
+#[non_exhaustive]
+pub struct CargoGpuMetadata {
+    /// Parameters of the shader crate build.
+    #[cfg_attr(feature = "clap", clap(flatten))]
+    pub build: CargoGpuBuildMetadata,
+    /// Parameters of the codegen backend installation for the shader crate.
+    #[cfg_attr(feature = "clap", clap(flatten))]
+    pub install: CargoGpuInstallMetadata,
+}
+
+impl RustGpuMetadata for CargoGpuMetadata {
+    #[inline]
+    fn patch<P>(&mut self, _shader_crate: P, _source: RustGpuMetadataSource<'_>)
+    where
+        P: AsRef<Path>,
+    {
+    }
+}
+
+/// Parameters for [`CargoGpuBuilder::new()`].
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct CargoGpuBuilderParams<W, T, C, O, E> {
+    /// Parameters of the shader crate build & codegen backend installation.
+    pub metadata: CargoGpuMetadata,
     /// Writer of user output.
     pub writer: W,
     /// Callbacks to halt toolchain installation.
@@ -62,31 +113,33 @@ pub struct CargoGpuBuilderParams<W, T, C, O, E> {
 }
 
 impl<W, T, C, O, E> CargoGpuBuilderParams<W, T, C, O, E> {
+    /// Replaces of the shader crate build & codegen backend installation.
+    #[inline]
+    #[must_use]
+    pub fn metadata(self, metadata: CargoGpuMetadata) -> Self {
+        Self { metadata, ..self }
+    }
+
     /// Replaces build parameters of the shader crate.
     #[inline]
     #[must_use]
-    pub fn build(self, build: SpirvBuilder) -> Self {
-        Self { build, ..self }
+    pub fn build(self, build: CargoGpuBuildMetadata) -> Self {
+        let metadata = CargoGpuMetadata {
+            build,
+            ..self.metadata
+        };
+        Self { metadata, ..self }
     }
 
     /// Replaces codegen backend installation parameters of the shader crate.
     #[inline]
     #[must_use]
-    pub fn install(self, install: SpirvCodegenBackendInstaller) -> Self {
-        Self { install, ..self }
-    }
-
-    /// Sets whether to force overwriting lockfiles from v4 to v3.
-    #[inline]
-    #[must_use]
-    pub fn force_overwrite_lockfiles_v4_to_v3(
-        self,
-        force_overwrite_lockfiles_v4_to_v3: bool,
-    ) -> Self {
-        Self {
-            force_overwrite_lockfiles_v4_to_v3,
-            ..self
-        }
+    pub fn install(self, install: CargoGpuInstallMetadata) -> Self {
+        let metadata = CargoGpuMetadata {
+            install,
+            ..self.metadata
+        };
+        Self { metadata, ..self }
     }
 
     /// Replaces the writer of user output.
@@ -94,9 +147,7 @@ impl<W, T, C, O, E> CargoGpuBuilderParams<W, T, C, O, E> {
     #[must_use]
     pub fn writer<NW>(self, writer: NW) -> CargoGpuBuilderParams<NW, T, C, O, E> {
         CargoGpuBuilderParams {
-            build: self.build,
-            install: self.install,
-            force_overwrite_lockfiles_v4_to_v3: self.force_overwrite_lockfiles_v4_to_v3,
+            metadata: self.metadata,
             writer,
             halt: self.halt,
             stdio_cfg: self.stdio_cfg,
@@ -111,9 +162,7 @@ impl<W, T, C, O, E> CargoGpuBuilderParams<W, T, C, O, E> {
         halt: HaltToolchainInstallation<NT, NC>,
     ) -> CargoGpuBuilderParams<W, NT, NC, O, E> {
         CargoGpuBuilderParams {
-            build: self.build,
-            install: self.install,
-            force_overwrite_lockfiles_v4_to_v3: self.force_overwrite_lockfiles_v4_to_v3,
+            metadata: self.metadata,
             writer: self.writer,
             halt,
             stdio_cfg: self.stdio_cfg,
@@ -128,9 +177,7 @@ impl<W, T, C, O, E> CargoGpuBuilderParams<W, T, C, O, E> {
         stdio_cfg: StdioCfg<NO, NE>,
     ) -> CargoGpuBuilderParams<W, T, C, NO, NE> {
         CargoGpuBuilderParams {
-            build: self.build,
-            install: self.install,
-            force_overwrite_lockfiles_v4_to_v3: self.force_overwrite_lockfiles_v4_to_v3,
+            metadata: self.metadata,
             writer: self.writer,
             halt: self.halt,
             stdio_cfg,
@@ -147,11 +194,18 @@ pub type DefaultCargoGpuBuilderParams = CargoGpuBuilderParams<
     InheritStderr,
 >;
 
-impl From<SpirvBuilder> for DefaultCargoGpuBuilderParams {
+impl<T> From<T> for DefaultCargoGpuBuilderParams
+where
+    T: Into<CargoGpuBuildMetadata>,
+{
     #[inline]
-    fn from(build: SpirvBuilder) -> Self {
+    fn from(value: T) -> Self {
+        let metadata = CargoGpuMetadata {
+            build: value.into(),
+            install: CargoGpuInstallMetadata::default(),
+        };
         Self {
-            build,
+            metadata,
             ..Self::default()
         }
     }
@@ -161,9 +215,7 @@ impl Default for DefaultCargoGpuBuilderParams {
     #[inline]
     fn default() -> Self {
         Self {
-            build: SpirvBuilder::default(),
-            install: SpirvCodegenBackendInstaller::default(),
-            force_overwrite_lockfiles_v4_to_v3: false,
+            metadata: CargoGpuMetadata::default(),
             writer: io::stdout(),
             halt: HaltToolchainInstallation::noop(),
             stdio_cfg: StdioCfg::inherit(),
@@ -212,23 +264,29 @@ where
         E: FnMut() -> Stdio,
     {
         let CargoGpuBuilderParams {
-            mut build,
-            install,
-            force_overwrite_lockfiles_v4_to_v3,
+            metadata,
             mut writer,
             halt,
             mut stdio_cfg,
         } = params.into();
+        let CargoGpuMetadata { build, install } = metadata;
+        let CargoGpuBuildMetadata {
+            spirv_builder: mut builder,
+        } = build;
+        let CargoGpuInstallMetadata {
+            spirv_installer: installer,
+            force_overwrite_lockfiles_v4_to_v3,
+        } = install;
 
-        if build.target.is_none() {
+        if builder.target.is_none() {
             return Err(NewCargoGpuBuilderError::MissingTarget);
         }
-        let path_to_crate = build
+        let path_to_crate = builder
             .path_to_crate
             .as_ref()
             .ok_or(NewCargoGpuBuilderError::MissingCratePath)?;
         let shader_crate = dunce::canonicalize(path_to_crate)?;
-        build.path_to_crate = Some(shader_crate.clone());
+        builder.path_to_crate = Some(shader_crate.clone());
 
         let backend_install_params = SpirvCodegenBackendInstallParams::from(&shader_crate)
             .writer(&mut writer)
@@ -240,7 +298,7 @@ where
                 stdout: || (stdio_cfg.stdout)(),
                 stderr: || (stdio_cfg.stderr)(),
             });
-        let codegen_backend = install.install(backend_install_params)?;
+        let codegen_backend = installer.install(backend_install_params)?;
 
         let lockfile_mismatch_handler = LockfileMismatchHandler::new(
             &shader_crate,
@@ -250,12 +308,12 @@ where
 
         #[expect(clippy::unreachable, reason = "target was set")]
         codegen_backend
-            .configure_spirv_builder(&mut build)
+            .configure_spirv_builder(&mut builder)
             .unwrap_or_else(|_| unreachable!("target was set before calling this function"));
 
         Ok(Self {
-            builder: build,
-            installer: install,
+            builder,
+            installer,
             codegen_backend,
             lockfile_mismatch_handler,
             writer,
