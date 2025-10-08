@@ -149,7 +149,7 @@ fn main() {
             rust_gpu_version: maybe_rust_gpu_version,
         } => {
             log::info!("installing cargo gpu");
-            cmd(["cargo", "install", "--path", "crates/cargo-gpu"]).unwrap();
+            cmd(["cargo", "install", "--path", "crates/cargo-gpu-cli"]).unwrap();
 
             log::info!("setup project");
             let dir = tempfile::TempDir::with_prefix("test-shader-output").unwrap();
