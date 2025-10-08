@@ -223,24 +223,26 @@ package = "rustc_codegen_spirv"
             std::env::consts::DLL_SUFFIX
         );
 
-        let dest_dylib_path;
-        if source.is_path() {
-            dest_dylib_path = install_dir
-                .join("target")
-                .join("release")
-                .join(&dylib_filename);
+        let (dest_dylib_path, skip_rebuild) = if source.is_path() {
+            (
+                install_dir
+                    .join("target")
+                    .join("release")
+                    .join(&dylib_filename),
+                // if `source` is a path, always rebuild
+                false,
+            )
         } else {
-            dest_dylib_path = install_dir.join(&dylib_filename);
-            if dest_dylib_path.is_file() {
-                log::info!(
-                    "cargo-gpu artifacts are already installed in '{}'",
-                    install_dir.display()
-                );
+            let dest_dylib_path = install_dir.join(&dylib_filename);
+            let artifacts_found = dest_dylib_path.is_file()
+                && install_dir.join("Cargo.toml").is_file()
+                && install_dir.join("src").join("lib.rs").is_file();
+            if artifacts_found {
+                log::info!("cargo-gpu artifacts found in '{}'", install_dir.display());
             }
-        }
+            (dest_dylib_path, artifacts_found && !self.rebuild_codegen)
+        };
 
-        // if `source` is a path, always rebuild
-        let skip_rebuild = !source.is_path() && dest_dylib_path.is_file() && !self.rebuild_codegen;
         if skip_rebuild {
             log::info!("...and so we are aborting the install step.");
         } else {
