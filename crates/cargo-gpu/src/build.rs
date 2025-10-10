@@ -1,17 +1,30 @@
-#![allow(clippy::shadow_reuse, reason = "let's not be silly")]
-#![allow(clippy::unwrap_used, reason = "this is basically a test")]
 //! `cargo gpu build`, analogous to `cargo build`
 
-use crate::install::Install;
-use crate::linkage::Linkage;
-use crate::lockfile::LockfileMismatchHandler;
-use anyhow::Context as _;
-use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
-use std::io::Write as _;
-use std::path::PathBuf;
+use core::convert::Infallible;
+use std::{
+    io::Write as _,
+    panic,
+    path::{Path, PathBuf},
+    thread,
+};
 
-/// Args for just a build
-#[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
+use anyhow::Context as _;
+
+use crate::{
+    cargo_gpu_build::{
+        build::{CargoGpuBuildMetadata, CargoGpuBuilder, CargoGpuBuilderParams},
+        metadata::{RustGpuMetadata, RustGpuMetadataSource},
+        spirv_builder::{CompileResult, ModuleResult},
+    },
+    install::InstallArgs,
+    linkage::Linkage,
+    user_consent::ask_for_user_consent,
+};
+
+/// Args for just a build.
+#[derive(Debug, Clone, clap::Parser, serde::Deserialize, serde::Serialize)]
+#[non_exhaustive]
+#[expect(clippy::module_name_repetitions, reason = "it is intended")]
 pub struct BuildArgs {
     /// Path to the output directory for the compiled shaders.
     #[clap(long, short, default_value = "./")]
@@ -21,12 +34,12 @@ pub struct BuildArgs {
     #[clap(long, short, action)]
     pub watch: bool,
 
-    /// the flattened [`SpirvBuilder`]
+    /// The flattened [`CargoGpuBuildMetadata`].
     #[clap(flatten)]
     #[serde(flatten)]
-    pub spirv_builder: SpirvBuilder,
+    pub build_meta: CargoGpuBuildMetadata,
 
-    ///Renames the manifest.json file to the given name
+    /// Renames the manifest.json file to the given name.
     #[clap(long, short, default_value = "manifest.json")]
     pub manifest_file: String,
 }
@@ -37,82 +50,101 @@ impl Default for BuildArgs {
         Self {
             output_dir: PathBuf::from("./"),
             watch: false,
-            spirv_builder: SpirvBuilder::default(),
+            build_meta: CargoGpuBuildMetadata::default(),
             manifest_file: String::from("manifest.json"),
         }
     }
 }
 
-/// `cargo build` subcommands
-#[derive(Clone, clap::Parser, Debug, serde::Deserialize, serde::Serialize)]
+/// `cargo build` subcommands.
+#[derive(Clone, Debug, Default, clap::Parser, serde::Deserialize, serde::Serialize)]
+#[non_exhaustive]
 pub struct Build {
-    /// CLI args for install the `rust-gpu` compiler and components
+    /// CLI args for install the `rust-gpu` compiler and components.
     #[clap(flatten)]
-    pub install: Install,
+    pub install: InstallArgs,
 
-    /// CLI args for configuring the build of the shader
+    /// CLI args for configuring the build of the shader.
     #[clap(flatten)]
     pub build: BuildArgs,
 }
 
 impl Build {
-    /// Entrypoint
+    /// Builds the shader crate.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the build process fails somehow.
+    #[inline]
     pub fn run(&mut self) -> anyhow::Result<()> {
-        let installed_backend = self.install.run()?;
+        let Self { install, build } = self;
+        let InstallArgs { install_meta, .. } = install;
+        let BuildArgs { build_meta, .. } = build;
 
-        let _lockfile_mismatch_handler = LockfileMismatchHandler::new(
-            &self.install.shader_crate,
-            &installed_backend.toolchain_channel,
-            self.install.force_overwrite_lockfiles_v4_to_v3,
-        )?;
+        build_meta.spirv_builder.path_to_crate = Some(install.shader_crate.clone());
 
-        let builder = &mut self.build.spirv_builder;
-        builder.path_to_crate = Some(self.install.shader_crate.clone());
-        installed_backend.configure_spirv_builder(builder)?;
+        let skip_consent = install.auto_install_rust_toolchain;
+        let halt = ask_for_user_consent(skip_consent);
+        let crate_builder_params = CargoGpuBuilderParams::from(build_meta.clone())
+            .install(install_meta.clone())
+            .halt(halt);
+        let crate_builder = CargoGpuBuilder::new(crate_builder_params)?;
+
+        install_meta.spirv_installer = crate_builder.installer.clone();
+        build_meta.spirv_builder = crate_builder.builder.clone();
 
         // Ensure the shader output dir exists
         log::debug!(
             "ensuring output-dir '{}' exists",
-            self.build.output_dir.display()
+            build.output_dir.display()
         );
-        std::fs::create_dir_all(&self.build.output_dir)?;
-        let canonicalized = dunce::canonicalize(&self.build.output_dir)?;
+        std::fs::create_dir_all(&build.output_dir)?;
+        let canonicalized = dunce::canonicalize(&build.output_dir)?;
         log::debug!("canonicalized output dir: {}", canonicalized.display());
-        self.build.output_dir = canonicalized;
+        build.output_dir = canonicalized;
 
-        // Ensure the shader crate exists
-        self.install.shader_crate = dunce::canonicalize(&self.install.shader_crate)?;
-        anyhow::ensure!(
-            self.install.shader_crate.exists(),
-            "shader crate '{}' does not exist. (Current dir is '{}')",
-            self.install.shader_crate.display(),
-            std::env::current_dir()?.display()
-        );
-
-        if self.build.watch {
-            let this = self.clone();
-            self.build
-                .spirv_builder
-                .watch(move |result, accept| {
-                    let result1 = this.parse_compilation_result(&result);
-                    if let Some(accept) = accept {
-                        accept.submit(result1);
-                    }
-                })?
-                .context("unreachable")??;
-            std::thread::park();
-        } else {
-            crate::user_output!(
-                "Compiling shaders at {}...\n",
-                self.install.shader_crate.display()
-            );
-            let result = self.build.spirv_builder.build()?;
-            self.parse_compilation_result(&result)?;
+        if build.watch {
+            let never = self.watch(crate_builder)?;
+            match never {}
         }
+        self.build(crate_builder)
+    }
+
+    /// Builds shader crate using [`CargoGpuBuilder`].
+    fn build(&self, mut crate_builder: CargoGpuBuilder) -> anyhow::Result<()> {
+        let result = crate_builder.build()?;
+        self.parse_compilation_result(&result)?;
         Ok(())
     }
 
-    /// Parses compilation result from `SpirvBuilder` and writes it out to a file
+    /// Watches shader crate for changes using [`CargoGpuBuilder`].
+    fn watch(&self, mut crate_builder: CargoGpuBuilder) -> anyhow::Result<Infallible> {
+        let this = self.clone();
+        let mut watcher = crate_builder.watch()?;
+        let watch_thread = thread::spawn(move || -> ! {
+            loop {
+                let compile_result = match watcher.recv() {
+                    Ok(compile_result) => compile_result,
+                    Err(err) => {
+                        log::error!("{err}");
+                        continue;
+                    }
+                };
+                if let Err(err) = this.parse_compilation_result(&compile_result) {
+                    log::error!("{err}");
+                }
+            }
+        });
+        match watch_thread.join() {
+            Ok(never) => never,
+            Err(payload) => {
+                log::error!("watch thread panicked");
+                panic::resume_unwind(payload)
+            }
+        }
+    }
+
+    /// Parses compilation result from [`SpirvBuilder`] and writes it out to a file.
     fn parse_compilation_result(&self, result: &CompileResult) -> anyhow::Result<()> {
         let shaders = match &result.module {
             ModuleResult::MultiModule(modules) => {
@@ -173,26 +205,262 @@ impl Build {
     }
 }
 
+impl RustGpuMetadata for Build {
+    #[inline]
+    fn patch<P>(&mut self, shader_crate: P, source: RustGpuMetadataSource<'_>)
+    where
+        P: AsRef<Path>,
+    {
+        let RustGpuMetadataSource::Crate(_) = source else {
+            return;
+        };
+
+        let output_dir = self.build.output_dir.as_path();
+        log::debug!(
+            "found output dir path in crate metadata: {}",
+            output_dir.display()
+        );
+
+        let new_output_dir = shader_crate.as_ref().join(output_dir);
+        log::debug!(
+            "setting that to be relative to the Cargo.toml it was found in: {}",
+            new_output_dir.display()
+        );
+
+        self.build.output_dir = new_output_dir;
+    }
+}
+
 #[cfg(test)]
 mod test {
     use clap::Parser as _;
+    use serde_json::json;
 
-    use crate::{Cli, Command};
+    use crate::{
+        cargo_gpu_build::{
+            metadata::{from_cargo_metadata, with_shader_crate},
+            spirv_builder::Capability,
+            spirv_cache::metadata::query_metadata,
+        },
+        test::{
+            overwrite_shader_cargo_toml, shader_crate_template_path, shader_crate_test_path,
+            tests_teardown,
+        },
+        Cli, Command,
+    };
+
+    use super::*;
+
+    const MANIFEST: &str = env!("CARGO_MANIFEST_DIR");
+    const PACKAGE: &str = env!("CARGO_PKG_NAME");
+
+    #[test_log::test]
+    fn metadata_default() {
+        let mut metadata = query_metadata(MANIFEST).unwrap();
+        metadata.packages.first_mut().unwrap().metadata = json!({});
+
+        let configs = from_cargo_metadata::<Build, _>(&metadata, Path::new("./")).unwrap();
+        assert!(configs.build.build_meta.spirv_builder.release);
+        assert!(!configs.install.auto_install_rust_toolchain);
+    }
+
+    #[test_log::test]
+    fn metadata_override_from_workspace() {
+        let mut metadata = query_metadata(MANIFEST).unwrap();
+        metadata.workspace_metadata = json!({
+            "rust-gpu": {
+                "build": {
+                    "release": false
+                },
+                "install": {
+                    "auto-install-rust-toolchain": true
+                }
+            }
+        });
+
+        let configs = from_cargo_metadata::<Build, _>(&metadata, Path::new("./")).unwrap();
+        assert!(!configs.build.build_meta.spirv_builder.release);
+        assert!(configs.install.auto_install_rust_toolchain);
+    }
+
+    #[test_log::test]
+    fn metadata_override_from_crate() {
+        let mut metadata = query_metadata(MANIFEST).unwrap();
+        let cargo_gpu = metadata
+            .packages
+            .iter_mut()
+            .find(|package| package.name.contains(PACKAGE))
+            .unwrap();
+        cargo_gpu.metadata = json!({
+            "rust-gpu": {
+                "build": {
+                    "release": false
+                },
+                "install": {
+                    "auto-install-rust-toolchain": true
+                }
+            }
+        });
+
+        let configs = from_cargo_metadata::<Build, _>(&metadata, Path::new(".")).unwrap();
+        assert!(!configs.build.build_meta.spirv_builder.release);
+        assert!(configs.install.auto_install_rust_toolchain);
+    }
+
+    #[test_log::test]
+    fn booleans_from_cli() {
+        let shader_crate_path = shader_crate_test_path();
+        let config = Build::parse_from([
+            "gpu".as_ref(),
+            // "build".as_ref(),
+            "--shader-crate".as_ref(),
+            shader_crate_path.as_os_str(),
+            "--debug".as_ref(),
+            "--auto-install-rust-toolchain".as_ref(),
+        ]);
+
+        let args = with_shader_crate(&config, &shader_crate_path).unwrap();
+        assert!(!args.build.build_meta.spirv_builder.release);
+        assert!(args.install.auto_install_rust_toolchain);
+    }
+
+    #[test_log::test]
+    fn booleans_from_cargo() {
+        let shader_crate_path = shader_crate_test_path();
+
+        let mut file = overwrite_shader_cargo_toml(&shader_crate_path);
+        file.write_all(
+            [
+                "[package.metadata.rust-gpu.build]",
+                "release = false",
+                "[package.metadata.rust-gpu.install]",
+                "auto-install-rust-toolchain = true",
+            ]
+            .join("\n")
+            .as_bytes(),
+        )
+        .unwrap();
+
+        let config = Build::parse_from([
+            "gpu".as_ref(),
+            // "build".as_ref(),
+            "--shader-crate".as_ref(),
+            shader_crate_path.as_os_str(),
+        ]);
+
+        let args = with_shader_crate(&config, &shader_crate_path).unwrap();
+        assert!(!args.build.build_meta.spirv_builder.release);
+        assert!(args.install.auto_install_rust_toolchain);
+    }
+
+    fn update_cargo_output_dir() -> PathBuf {
+        let shader_crate_path = shader_crate_test_path();
+        let mut file = overwrite_shader_cargo_toml(&shader_crate_path);
+        file.write_all(
+            [
+                "[package.metadata.rust-gpu.build]",
+                "output-dir = \"/the/moon\"",
+            ]
+            .join("\n")
+            .as_bytes(),
+        )
+        .unwrap();
+        shader_crate_path
+    }
+
+    #[test_log::test]
+    fn string_from_cargo() {
+        let shader_crate_path = update_cargo_output_dir();
+        let config = Build::parse_from([
+            "gpu".as_ref(),
+            // "build".as_ref(),
+            "--shader-crate".as_ref(),
+            shader_crate_path.as_os_str(),
+        ]);
+
+        let args = with_shader_crate(&config, &shader_crate_path).unwrap();
+        if cfg!(target_os = "windows") {
+            assert_eq!(args.build.output_dir, Path::new("C:/the/moon"));
+        } else {
+            assert_eq!(args.build.output_dir, Path::new("/the/moon"));
+        }
+    }
+
+    #[test_log::test]
+    fn string_from_cargo_overwritten_by_cli() {
+        let shader_crate_path = update_cargo_output_dir();
+        let config = Build::parse_from([
+            "gpu".as_ref(),
+            // "build".as_ref(),
+            "--shader-crate".as_ref(),
+            shader_crate_path.as_os_str(),
+            "--output-dir".as_ref(),
+            "/the/river".as_ref(),
+        ]);
+
+        let args = with_shader_crate(&config, &shader_crate_path).unwrap();
+        assert_eq!(args.build.output_dir, Path::new("/the/river"));
+    }
+
+    #[test_log::test]
+    fn arrays_from_cargo() {
+        let shader_crate_path = shader_crate_test_path();
+
+        let mut file = overwrite_shader_cargo_toml(&shader_crate_path);
+        file.write_all(
+            [
+                "[package.metadata.rust-gpu.build]",
+                "capabilities = [\"AtomicStorage\", \"Matrix\"]",
+            ]
+            .join("\n")
+            .as_bytes(),
+        )
+        .unwrap();
+
+        let config = Build::parse_from([
+            "gpu".as_ref(),
+            // "build".as_ref(),
+            "--shader-crate".as_ref(),
+            shader_crate_path.as_os_str(),
+        ]);
+
+        let args = with_shader_crate(&config, &shader_crate_path).unwrap();
+        assert_eq!(
+            args.build.build_meta.spirv_builder.capabilities,
+            [Capability::AtomicStorage, Capability::Matrix]
+        );
+    }
+
+    #[test_log::test]
+    fn rename_manifest_parse() {
+        let shader_crate_path = shader_crate_test_path();
+        let config = Build::parse_from([
+            "gpu".as_ref(),
+            // "build".as_ref(),
+            "--shader-crate".as_ref(),
+            shader_crate_path.as_os_str(),
+            "--manifest-file".as_ref(),
+            "mymanifest".as_ref(),
+        ]);
+
+        let args = with_shader_crate(&config, &shader_crate_path).unwrap();
+        assert_eq!(args.build.manifest_file, "mymanifest".to_owned());
+    }
 
     #[test_log::test]
     fn builder_from_params() {
-        crate::test::tests_teardown();
+        tests_teardown();
 
-        let shader_crate_path = crate::test::shader_crate_template_path();
+        let shader_crate_path = shader_crate_template_path();
         let output_dir = shader_crate_path.join("shaders");
 
         let args = [
-            "target/debug/cargo-gpu",
-            "build",
-            "--shader-crate",
-            &format!("{}", shader_crate_path.display()),
-            "--output-dir",
-            &format!("{}", output_dir.display()),
+            "target/debug/cargo-gpu".as_ref(),
+            "build".as_ref(),
+            "--shader-crate".as_ref(),
+            shader_crate_path.as_os_str(),
+            "--output-dir".as_ref(),
+            output_dir.as_os_str(),
         ];
         if let Cli {
             command: Command::Build(build),
