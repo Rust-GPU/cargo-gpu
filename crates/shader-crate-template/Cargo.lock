@@ -16,9 +16,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "glam"
-version = "0.29.2"
+version = "0.30.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc46dd3ec48fdd8e693a98d2b8bafae273a2d54c1de02a2a7e3d57d501f39677"
+checksum = "e12d847aeb25f41be4c0ec9587d624e9cd631bc007a8fd7ce3f5851e064c6460"
 dependencies = [
  "libm",
 ]
@@ -61,14 +61,13 @@ dependencies = [
 name = "rust-gpu-shader-crate-template"
 version = "0.1.0"
 dependencies = [
- "glam",
  "spirv-std",
 ]
 
 [[package]]
 name = "spirv-std"
 version = "0.9.0"
-source = "git+https://github.com/Rust-GPU/rust-gpu?rev=86fc48032c4cd4afb74f1d81ae859711d20386a1#86fc48032c4cd4afb74f1d81ae859711d20386a1"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=2aa4d4f8a8ba73103501562cfca17b8163e5a887#2aa4d4f8a8ba73103501562cfca17b8163e5a887"
 dependencies = [
  "bitflags",
  "glam",
@@ -81,7 +80,7 @@ dependencies = [
 [[package]]
 name = "spirv-std-macros"
 version = "0.9.0"
-source = "git+https://github.com/Rust-GPU/rust-gpu?rev=86fc48032c4cd4afb74f1d81ae859711d20386a1#86fc48032c4cd4afb74f1d81ae859711d20386a1"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=2aa4d4f8a8ba73103501562cfca17b8163e5a887#2aa4d4f8a8ba73103501562cfca17b8163e5a887"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -92,7 +91,7 @@ dependencies = [
 [[package]]
 name = "spirv-std-types"
 version = "0.9.0"
-source = "git+https://github.com/Rust-GPU/rust-gpu?rev=86fc48032c4cd4afb74f1d81ae859711d20386a1#86fc48032c4cd4afb74f1d81ae859711d20386a1"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=2aa4d4f8a8ba73103501562cfca17b8163e5a887#2aa4d4f8a8ba73103501562cfca17b8163e5a887"
 
 [[package]]
 name = "syn"
