@@ -65,7 +65,7 @@ impl InstalledBackend {
 #[non_exhaustive]
 pub struct Install {
     /// Directory containing the shader crate to compile.
-    #[clap(long, alias("package"), short_alias('p'), default_value = "./")]
+    #[clap(long, alias("package"), default_value = "./")]
     #[serde(alias = "package")]
     pub shader_crate: PathBuf,
 
