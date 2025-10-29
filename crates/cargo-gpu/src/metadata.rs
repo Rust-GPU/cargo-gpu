@@ -17,7 +17,7 @@ impl Metadata {
     /// from the workspace `Cargo.toml`, then on top of those we merge any config from the shader
     /// crate's `Cargo.toml`.
     pub fn as_json(path: &std::path::PathBuf) -> anyhow::Result<Value> {
-        log::debug!("reading package metadata from {path:?}");
+        log::debug!("reading package metadata from {}", path.display());
         let cargo_json = Self::get_cargo_toml_as_json(path)?;
         let config = Self::merge_configs(&cargo_json, path)?;
         Ok(config)
@@ -28,7 +28,7 @@ impl Metadata {
         cargo_json: &cargo_metadata::Metadata,
         path: &std::path::Path,
     ) -> anyhow::Result<Value> {
-        log::debug!("merging cargo metadata from {path:?}");
+        log::debug!("merging cargo metadata from {}", path.display());
         let mut metadata = crate::config::Config::defaults_as_json()?;
         crate::config::Config::json_merge(
             &mut metadata,
