@@ -1,5 +1,6 @@
 //! Get config from the shader crate's `Cargo.toml` `[*.metadata.rust-gpu.*]`
 
+use anyhow::Context as _;
 use cargo_metadata::MetadataCommand;
 use serde_json::Value;
 
@@ -9,6 +10,28 @@ use serde_json::Value;
 pub struct Metadata;
 
 impl Metadata {
+    /// Resolve a package name to a crate directory.
+    pub fn resolve_package_to_shader_crate(package: &str) -> anyhow::Result<std::path::PathBuf> {
+        log::debug!("resolving package '{package}' to shader crate");
+        let metadata = MetadataCommand::new().exec()?;
+        let meta_package = metadata
+            .packages
+            .iter()
+            .find(|pkg| pkg.name.as_str() == package)
+            .context("Package not found in metadata")?;
+        let shader_crate_path: std::path::PathBuf = meta_package
+            .manifest_path
+            .parent()
+            .context("manifest is missing a parent directory")?
+            .to_path_buf()
+            .into();
+        log::debug!(
+            "  determined shader crate path to be '{}'",
+            shader_crate_path.display()
+        );
+        Ok(shader_crate_path)
+    }
+
     /// Convert `rust-gpu`-specific sections in `Cargo.toml` to `clap`-compatible arguments.
     /// The section in question is: `[package.metadata.rust-gpu.*]`. See the `shader-crate-template`
     /// for an example.

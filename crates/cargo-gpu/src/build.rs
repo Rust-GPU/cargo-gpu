@@ -60,6 +60,11 @@ impl Build {
     pub fn run(&mut self) -> anyhow::Result<()> {
         let installed_backend = self.install.run()?;
 
+        if let Some(package) = self.install.package.as_ref() {
+            self.install.shader_crate =
+                crate::metadata::Metadata::resolve_package_to_shader_crate(package)?;
+        }
+
         let _lockfile_mismatch_handler = LockfileMismatchHandler::new(
             &self.install.shader_crate,
             &installed_backend.toolchain_channel,
