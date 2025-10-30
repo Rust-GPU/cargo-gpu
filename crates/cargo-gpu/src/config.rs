@@ -86,11 +86,13 @@ impl Config {
 mod test {
     use super::*;
 
+    use crate::test::TestEnv;
     use std::io::Write as _;
 
     #[test_log::test]
     fn booleans_from_cli() {
-        let shader_crate_path = crate::test::shader_crate_test_path();
+        let _env = TestEnv::new();
+        let shader_crate_path = _env.setup_shader_crate().unwrap();
 
         let args = Config::clap_command_with_cargo_config(
             &shader_crate_path,
@@ -108,43 +110,45 @@ mod test {
 
     #[test_log::test]
     fn booleans_from_cargo() {
-        let shader_crate_path = crate::test::shader_crate_test_path();
-        let mut file = crate::test::overwrite_shader_cargo_toml(&shader_crate_path);
-        file.write_all(
-            [
-                "[package.metadata.rust-gpu.build]",
-                "release = false",
-                "[package.metadata.rust-gpu.install]",
-                "auto-install-rust-toolchain = true",
-            ]
-            .join("\n")
-            .as_bytes(),
-        )
-        .unwrap();
+        let _env = TestEnv::new();
+        let shader_crate_path = _env
+            .setup_shader_crate_with_cargo_toml(|file| {
+                file.write_all(
+                    [
+                        "[package.metadata.rust-gpu.build]",
+                        "release = false",
+                        "[package.metadata.rust-gpu.install]",
+                        "auto-install-rust-toolchain = true",
+                    ]
+                    .join("\n")
+                    .as_bytes(),
+                )
+            })
+            .unwrap();
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
         assert!(!args.build.spirv_builder.release);
         assert!(args.install.auto_install_rust_toolchain);
     }
 
-    fn update_cargo_output_dir() -> std::path::PathBuf {
-        let shader_crate_path = crate::test::shader_crate_test_path();
-        let mut file = crate::test::overwrite_shader_cargo_toml(&shader_crate_path);
-        file.write_all(
-            [
-                "[package.metadata.rust-gpu.build]",
-                "output-dir = \"/the/moon\"",
-            ]
-            .join("\n")
-            .as_bytes(),
-        )
-        .unwrap();
-        shader_crate_path
+    fn update_cargo_output_dir(_env: &TestEnv) -> std::path::PathBuf {
+        _env.setup_shader_crate_with_cargo_toml(|file| {
+            file.write_all(
+                [
+                    "[package.metadata.rust-gpu.build]",
+                    "output-dir = \"/the/moon\"",
+                ]
+                .join("\n")
+                .as_bytes(),
+            )
+        })
+        .unwrap()
     }
 
     #[test_log::test]
     fn string_from_cargo() {
-        let shader_crate_path = update_cargo_output_dir();
+        let _env = TestEnv::new();
+        let shader_crate_path = update_cargo_output_dir(&_env);
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
         if cfg!(target_os = "windows") {
@@ -156,7 +160,8 @@ mod test {
 
     #[test_log::test]
     fn string_from_cargo_overwritten_by_cli() {
-        let shader_crate_path = update_cargo_output_dir();
+        let _env = TestEnv::new();
+        let shader_crate_path = update_cargo_output_dir(&_env);
 
         let args = Config::clap_command_with_cargo_config(
             &shader_crate_path,
@@ -173,17 +178,19 @@ mod test {
 
     #[test_log::test]
     fn arrays_from_cargo() {
-        let shader_crate_path = crate::test::shader_crate_test_path();
-        let mut file = crate::test::overwrite_shader_cargo_toml(&shader_crate_path);
-        file.write_all(
-            [
-                "[package.metadata.rust-gpu.build]",
-                "capabilities = [\"AtomicStorage\", \"Matrix\"]",
-            ]
-            .join("\n")
-            .as_bytes(),
-        )
-        .unwrap();
+        let _env = TestEnv::new();
+        let shader_crate_path = _env
+            .setup_shader_crate_with_cargo_toml(|file| {
+                file.write_all(
+                    [
+                        "[package.metadata.rust-gpu.build]",
+                        "capabilities = [\"AtomicStorage\", \"Matrix\"]",
+                    ]
+                    .join("\n")
+                    .as_bytes(),
+                )
+            })
+            .unwrap();
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
         assert_eq!(
@@ -197,7 +204,8 @@ mod test {
 
     #[test_log::test]
     fn rename_manifest_parse() {
-        let shader_crate_path = crate::test::shader_crate_test_path();
+        let _env = TestEnv::new();
+        let shader_crate_path = _env.setup_shader_crate().unwrap();
 
         let args = Config::clap_command_with_cargo_config(
             &shader_crate_path,

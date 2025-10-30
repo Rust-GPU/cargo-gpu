@@ -248,6 +248,7 @@ pub fn get_channel_from_rustc_codegen_spirv_build_script(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::test::TestEnv;
     use cargo_metadata::{PackageBuilder, PackageId, Source};
     use cargo_util_schemas::manifest::PackageName;
 
@@ -272,6 +273,7 @@ mod test {
 
     #[test_log::test]
     fn cached_checkout_dir_sanity() {
+        let _env = TestEnv::new();
         let shader_template_path = crate::test::shader_crate_template_path();
         let source = SpirvSource::get_rust_gpu_deps_from_shader(&shader_template_path).unwrap();
         let dir = source.install_dir().unwrap();

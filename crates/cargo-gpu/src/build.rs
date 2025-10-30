@@ -181,8 +181,6 @@ mod test {
 
     #[test_log::test]
     fn builder_from_params() {
-        crate::test::tests_teardown();
-
         let shader_crate_path = crate::test::shader_crate_template_path();
         let output_dir = shader_crate_path.join("shaders");
 
