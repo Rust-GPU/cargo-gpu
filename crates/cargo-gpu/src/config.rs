@@ -25,7 +25,7 @@ impl Config {
     /// `Cargo.toml`, so here we load that config first as the base config, and the CLI arguments can
     /// then later override it.
     pub fn clap_command_with_cargo_config(
-        shader_crate_path: &std::path::PathBuf,
+        shader_crate_path: &std::path::Path,
         mut env_args: Vec<String>,
         metadata: &mut MetadataCache,
     ) -> anyhow::Result<crate::build::Build> {

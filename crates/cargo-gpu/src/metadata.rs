@@ -17,6 +17,8 @@ pub struct MetadataCache {
 }
 
 impl MetadataCache {
+    /// Return the cached cargo metadata for the Cargo.toml at the given path,
+    /// or find it, populate the cache with it and return it.
     fn get_metadata(
         &mut self,
         maybe_path_to_manifest_dir: Option<&std::path::Path>,
@@ -32,11 +34,15 @@ impl MetadataCache {
             self.inner.insert(path.clone(), metadata);
         }
 
-        // UNWRAP: safe because we just inserted it
-        Ok(self.inner.get(&path).unwrap())
+        self.inner.get(&path).context("unreachable")
     }
 
     /// Resolve a package name to a crate directory.
+    ///
+    /// ## Errors
+    /// * if fetching cargo metadata fails.
+    /// * if no packages are listed in the cargo metadata.
+    /// * if the manifest path has no parent.
     pub fn resolve_package_to_shader_crate(
         &mut self,
         package: &str,
@@ -69,7 +75,10 @@ impl MetadataCache {
     /// First we generate the CLI arg defaults as JSON. Then on top of those we merge any config
     /// from the workspace `Cargo.toml`, then on top of those we merge any config from the shader
     /// crate's `Cargo.toml`.
-    pub fn as_json(&mut self, path: &std::path::PathBuf) -> anyhow::Result<Value> {
+    ///
+    /// ## Errors
+    /// Errors if cargo metadata cannot be found or if it cannot be operated on.
+    pub fn as_json(&mut self, path: &std::path::Path) -> anyhow::Result<Value> {
         log::debug!("reading package metadata from {}", path.display());
         let cargo_json = self.get_cargo_toml_as_json(path)?;
         let config = Self::merge_configs(&cargo_json, path)?;
@@ -121,9 +130,9 @@ impl MetadataCache {
     /// Convert a `Cargo.toml` to JSON
     fn get_cargo_toml_as_json(
         &mut self,
-        path: &std::path::PathBuf,
+        path: &std::path::Path,
     ) -> anyhow::Result<cargo_metadata::Metadata> {
-        self.get_metadata(Some(path.as_path())).cloned()
+        self.get_metadata(Some(path)).cloned()
     }
 
     /// Get any `rust-gpu` metadata set in the crate's `Cargo.toml`
