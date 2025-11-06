@@ -170,6 +170,7 @@ pub struct Cli {
 /// may fail if we can't find the user home directory
 #[inline]
 #[cfg(not(test))]
+#[expect(clippy::cfg_not_test, reason = "tests use different cache_dir")]
 pub fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
     use anyhow::Context as _;
     Ok(directories::BaseDirs::new()
