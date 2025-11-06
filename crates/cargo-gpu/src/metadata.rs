@@ -1,19 +1,49 @@
 //! Get config from the shader crate's `Cargo.toml` `[*.metadata.rust-gpu.*]`
 
+use std::collections::HashMap;
+
 use anyhow::Context as _;
 use cargo_metadata::MetadataCommand;
 use serde_json::Value;
 
-/// `Metadata` refers to the `[metadata.*]` section of `Cargo.toml` that `cargo` formally
+/// A cache of metadata from various `Cargo.toml` files.
+///
+/// "Metadata" refers to the `[metadata.*]` section of `Cargo.toml` that `cargo` formally
 /// ignores so that packages can implement their own behaviour with it.
-#[derive(Debug)]
-pub struct Metadata;
+#[derive(Debug, Default)]
+pub struct MetadataCache {
+    /// Cached result of `MetadataCommand::new().exec()`.
+    inner: HashMap<std::path::PathBuf, cargo_metadata::Metadata>,
+}
 
-impl Metadata {
+impl MetadataCache {
+    fn get_metadata(
+        &mut self,
+        maybe_path_to_manifest_dir: Option<&std::path::Path>,
+    ) -> anyhow::Result<&cargo_metadata::Metadata> {
+        let path = if let Some(path) = maybe_path_to_manifest_dir {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir().context("cannot determine the current working directory")?
+        };
+
+        if !self.inner.contains_key(&path) {
+            let metadata = MetadataCommand::new().current_dir(&path).exec()?;
+            self.inner.insert(path.clone(), metadata);
+        }
+
+        // UNWRAP: safe because we just inserted it
+        Ok(self.inner.get(&path).unwrap())
+    }
+
     /// Resolve a package name to a crate directory.
-    pub fn resolve_package_to_shader_crate(package: &str) -> anyhow::Result<std::path::PathBuf> {
+    pub fn resolve_package_to_shader_crate(
+        &mut self,
+        package: &str,
+    ) -> anyhow::Result<std::path::PathBuf> {
         log::debug!("resolving package '{package}' to shader crate");
-        let metadata = MetadataCommand::new().exec()?;
+        let metadata = self.get_metadata(None)?;
+
         let meta_package = metadata
             .packages
             .iter()
@@ -39,9 +69,9 @@ impl Metadata {
     /// First we generate the CLI arg defaults as JSON. Then on top of those we merge any config
     /// from the workspace `Cargo.toml`, then on top of those we merge any config from the shader
     /// crate's `Cargo.toml`.
-    pub fn as_json(path: &std::path::PathBuf) -> anyhow::Result<Value> {
+    pub fn as_json(&mut self, path: &std::path::PathBuf) -> anyhow::Result<Value> {
         log::debug!("reading package metadata from {}", path.display());
-        let cargo_json = Self::get_cargo_toml_as_json(path)?;
+        let cargo_json = self.get_cargo_toml_as_json(path)?;
         let config = Self::merge_configs(&cargo_json, path)?;
         Ok(config)
     }
@@ -90,9 +120,10 @@ impl Metadata {
 
     /// Convert a `Cargo.toml` to JSON
     fn get_cargo_toml_as_json(
+        &mut self,
         path: &std::path::PathBuf,
     ) -> anyhow::Result<cargo_metadata::Metadata> {
-        Ok(MetadataCommand::new().current_dir(path).exec()?)
+        self.get_metadata(Some(path.as_path())).cloned()
     }
 
     /// Get any `rust-gpu` metadata set in the crate's `Cargo.toml`
@@ -161,7 +192,7 @@ mod test {
             .exec()
             .unwrap();
         metadata.packages.first_mut().unwrap().metadata = serde_json::json!({});
-        let configs = Metadata::merge_configs(&metadata, Path::new("./")).unwrap();
+        let configs = MetadataCache::merge_configs(&metadata, Path::new("./")).unwrap();
         assert_eq!(configs["build"]["release"], Value::Bool(true));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],
@@ -185,7 +216,7 @@ mod test {
                 }
             }
         });
-        let configs = Metadata::merge_configs(&metadata, Path::new("./")).unwrap();
+        let configs = MetadataCache::merge_configs(&metadata, Path::new("./")).unwrap();
         assert_eq!(configs["build"]["release"], Value::Bool(false));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],
@@ -214,7 +245,7 @@ mod test {
                 }
             }
         });
-        let configs = Metadata::merge_configs(&metadata, Path::new(".")).unwrap();
+        let configs = MetadataCache::merge_configs(&metadata, Path::new(".")).unwrap();
         assert_eq!(configs["build"]["release"], Value::Bool(false));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],

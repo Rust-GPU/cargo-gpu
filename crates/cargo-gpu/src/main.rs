@@ -37,5 +37,6 @@ fn run() -> anyhow::Result<()> {
         .collect::<Vec<_>>();
     log::trace!("CLI args: {env_args:#?}");
     let cli = Cli::parse_from(&env_args);
-    cli.command.run(env_args)
+    let mut metadata_cache = cargo_gpu::MetadataCache::default();
+    cli.command.run(env_args, &mut metadata_cache)
 }

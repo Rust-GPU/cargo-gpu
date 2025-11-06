@@ -2,6 +2,8 @@
 use anyhow::Context as _;
 use clap::Parser as _;
 
+use crate::metadata::MetadataCache;
+
 /// Config
 pub struct Config;
 
@@ -25,8 +27,9 @@ impl Config {
     pub fn clap_command_with_cargo_config(
         shader_crate_path: &std::path::PathBuf,
         mut env_args: Vec<String>,
+        metadata: &mut MetadataCache,
     ) -> anyhow::Result<crate::build::Build> {
-        let mut config = crate::metadata::Metadata::as_json(shader_crate_path)?;
+        let mut config = metadata.as_json(shader_crate_path)?;
 
         env_args.retain(|arg| !(arg == "build" || arg == "install"));
         let cli_args_json = Self::cli_args_to_json(env_args)?;
@@ -100,6 +103,7 @@ mod test {
                 "--debug".to_owned(),
                 "--auto-install-rust-toolchain".to_owned(),
             ],
+            &mut MetadataCache::default(),
         )
         .unwrap();
         assert!(!args.build.spirv_builder.release);
@@ -122,7 +126,12 @@ mod test {
         )
         .unwrap();
 
-        let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
+        let args = Config::clap_command_with_cargo_config(
+            &shader_crate_path,
+            vec![],
+            &mut MetadataCache::default(),
+        )
+        .unwrap();
         assert!(!args.build.spirv_builder.release);
         assert!(args.install.auto_install_rust_toolchain);
     }
@@ -146,7 +155,12 @@ mod test {
     fn string_from_cargo() {
         let shader_crate_path = update_cargo_output_dir();
 
-        let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
+        let args = Config::clap_command_with_cargo_config(
+            &shader_crate_path,
+            vec![],
+            &mut MetadataCache::default(),
+        )
+        .unwrap();
         if cfg!(target_os = "windows") {
             assert_eq!(args.build.output_dir, std::path::Path::new("C:/the/moon"));
         } else {
@@ -166,6 +180,7 @@ mod test {
                 "--output-dir".to_owned(),
                 "/the/river".to_owned(),
             ],
+            &mut MetadataCache::default(),
         )
         .unwrap();
         assert_eq!(args.build.output_dir, std::path::Path::new("/the/river"));
@@ -185,7 +200,12 @@ mod test {
         )
         .unwrap();
 
-        let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
+        let args = Config::clap_command_with_cargo_config(
+            &shader_crate_path,
+            vec![],
+            &mut MetadataCache::default(),
+        )
+        .unwrap();
         assert_eq!(
             args.build.spirv_builder.capabilities,
             vec![
@@ -207,6 +227,7 @@ mod test {
                 "--manifest-file".to_owned(),
                 "mymanifest".to_owned(),
             ],
+            &mut MetadataCache::default(),
         )
         .unwrap();
         assert_eq!(args.build.manifest_file, "mymanifest".to_owned());
