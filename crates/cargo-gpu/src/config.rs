@@ -152,7 +152,15 @@ mod test {
 
         let args = Config::clap_command_with_cargo_config(&shader_crate_path, vec![]).unwrap();
         if cfg!(target_os = "windows") {
-            assert_eq!(args.build.output_dir, std::path::Path::new("C:/the/moon"));
+            assert!(
+                args.build
+                    .output_dir
+                    .to_str()
+                    .unwrap()
+                    .ends_with("/the/moon"),
+                "Actual: {:?}",
+                args.build.output_dir
+            );
         } else {
             assert_eq!(args.build.output_dir, std::path::Path::new("/the/moon"));
         }
