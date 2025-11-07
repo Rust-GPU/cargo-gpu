@@ -132,7 +132,19 @@ impl ShaderCrateTemplateCargoTomlWriter {
     fn replace_spirv_std_version(&mut self, version: String) -> anyhow::Result<()> {
         let dependencies = self.get_cargo_dependencies_table();
         let spirv_std = dependencies.get_mut("spirv-std").unwrap();
-        *spirv_std = toml::Value::String(version);
+        if version.contains('.') {
+            // semver
+            *spirv_std = toml::Value::String(version);
+        } else {
+            // git rev
+            *spirv_std = toml::Value::Table(toml::Table::from_iter([
+                (
+                    "git".to_owned(),
+                    toml::Value::String("https://github.com/Rust-GPU/rust-gpu".to_owned()),
+                ),
+                ("rev".to_owned(), toml::Value::String(version)),
+            ]));
+        }
         self.write_shader_crate_cargo_toml_changes()?;
         Ok(())
     }
