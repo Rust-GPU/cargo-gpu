@@ -248,6 +248,7 @@ pub fn get_channel_from_rustc_codegen_spirv_build_script(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::test::TestEnv;
     use cargo_metadata::{PackageBuilder, PackageId, Source};
     use cargo_util_schemas::manifest::PackageName;
 
@@ -259,7 +260,7 @@ mod test {
             source,
             SpirvSource::Git {
                 url: "https://github.com/Rust-GPU/rust-gpu".to_owned(),
-                rev: "86fc48032c4cd4afb74f1d81ae859711d20386a1".to_owned()
+                rev: "2aa4d4f8a8ba73103501562cfca17b8163e5a887".to_owned()
             }
         );
     }
@@ -272,6 +273,7 @@ mod test {
 
     #[test_log::test]
     fn cached_checkout_dir_sanity() {
+        let _env = TestEnv::new();
         let shader_template_path = crate::test::shader_crate_template_path();
         let source = SpirvSource::get_rust_gpu_deps_from_shader(&shader_template_path).unwrap();
         let dir = source.install_dir().unwrap();
@@ -281,7 +283,7 @@ mod test {
             .to_str()
             .map(std::string::ToString::to_string)
             .unwrap();
-        assert_eq!("https___github_com_Rust-GPU_rust-gpu+86fc4803", &name);
+        assert_eq!("https___github_com_Rust-GPU_rust-gpu+2aa4d4f8", &name);
     }
 
     #[test_log::test]

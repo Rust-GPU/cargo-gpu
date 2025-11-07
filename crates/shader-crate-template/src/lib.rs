@@ -2,7 +2,7 @@
 //!
 //! Contains an example vertex shader, fragment shader.
 #![no_std]
-use glam::{Vec2, Vec4};
+use spirv_std::glam::{Vec2, Vec4};
 use spirv_std::spirv;
 
 pub const CLIP_SPACE_COORD_QUAD_CCW: [Vec4; 6] = {

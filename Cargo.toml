@@ -7,7 +7,9 @@ members = [
 exclude = [
 	# This currently needs to be excluded because it depends on a version of `rust-gpu` that
 	# uses a toolchain whose Cargo version doesn't recognise version 4 of `Cargo.lock`.
-	"crates/shader-crate-template"
+	"crates/shader-crate-template",
+	# Testing infra may copy the `shader-crate-template` into subdirs of target
+	"target",
 ]
 
 resolver = "2"
