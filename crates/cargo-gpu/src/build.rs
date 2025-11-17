@@ -59,6 +59,11 @@ impl Build {
     /// Entrypoint
     pub fn run(&mut self) -> anyhow::Result<()> {
         let installed_backend = self.install.run()?;
+        let mut metadata = crate::metadata::MetadataCache::default();
+
+        if let Some(package) = self.install.package.as_ref() {
+            self.install.shader_crate = metadata.resolve_package_to_shader_crate(package)?;
+        }
 
         let _lockfile_mismatch_handler = LockfileMismatchHandler::new(
             &self.install.shader_crate,

@@ -1,14 +1,73 @@
 //! Get config from the shader crate's `Cargo.toml` `[*.metadata.rust-gpu.*]`
 
+use std::collections::HashMap;
+
+use anyhow::Context as _;
 use cargo_metadata::MetadataCommand;
 use serde_json::Value;
 
-/// `Metadata` refers to the `[metadata.*]` section of `Cargo.toml` that `cargo` formally
+/// A cache of metadata from various `Cargo.toml` files.
+///
+/// "Metadata" refers to the `[metadata.*]` section of `Cargo.toml` that `cargo` formally
 /// ignores so that packages can implement their own behaviour with it.
-#[derive(Debug)]
-pub struct Metadata;
+#[derive(Debug, Default)]
+pub struct MetadataCache {
+    /// Cached result of `MetadataCommand::new().exec()`.
+    inner: HashMap<std::path::PathBuf, cargo_metadata::Metadata>,
+}
 
-impl Metadata {
+impl MetadataCache {
+    /// Return the cached cargo metadata for the Cargo.toml at the given path,
+    /// or find it, populate the cache with it and return it.
+    fn get_metadata(
+        &mut self,
+        maybe_path_to_manifest_dir: Option<&std::path::Path>,
+    ) -> anyhow::Result<&cargo_metadata::Metadata> {
+        let path = if let Some(path) = maybe_path_to_manifest_dir {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir().context("cannot determine the current working directory")?
+        };
+
+        if !self.inner.contains_key(&path) {
+            let metadata = MetadataCommand::new().current_dir(&path).exec()?;
+            self.inner.insert(path.clone(), metadata);
+        }
+
+        self.inner.get(&path).context("unreachable")
+    }
+
+    /// Resolve a package name to a crate directory.
+    ///
+    /// ## Errors
+    /// * if fetching cargo metadata fails.
+    /// * if no packages are listed in the cargo metadata.
+    /// * if the manifest path has no parent.
+    pub fn resolve_package_to_shader_crate(
+        &mut self,
+        package: &str,
+    ) -> anyhow::Result<std::path::PathBuf> {
+        log::debug!("resolving package '{package}' to shader crate");
+        let metadata = self.get_metadata(None)?;
+
+        let meta_package = metadata
+            .packages
+            .iter()
+            .find(|pkg| pkg.name.as_str() == package)
+            .context("Package not found in metadata")?;
+        let shader_crate_path: std::path::PathBuf = meta_package
+            .manifest_path
+            .parent()
+            .context("manifest is missing a parent directory")?
+            .to_path_buf()
+            .into();
+        log::debug!(
+            "  determined shader crate path to be '{}'",
+            shader_crate_path.display()
+        );
+        Ok(shader_crate_path)
+    }
+
     /// Convert `rust-gpu`-specific sections in `Cargo.toml` to `clap`-compatible arguments.
     /// The section in question is: `[package.metadata.rust-gpu.*]`. See the `shader-crate-template`
     /// for an example.
@@ -16,8 +75,12 @@ impl Metadata {
     /// First we generate the CLI arg defaults as JSON. Then on top of those we merge any config
     /// from the workspace `Cargo.toml`, then on top of those we merge any config from the shader
     /// crate's `Cargo.toml`.
-    pub fn as_json(path: &std::path::PathBuf) -> anyhow::Result<Value> {
-        let cargo_json = Self::get_cargo_toml_as_json(path)?;
+    ///
+    /// ## Errors
+    /// Errors if cargo metadata cannot be found or if it cannot be operated on.
+    pub fn as_json(&mut self, path: &std::path::Path) -> anyhow::Result<Value> {
+        log::debug!("reading package metadata from {}", path.display());
+        let cargo_json = self.get_cargo_toml_as_json(path)?;
         let config = Self::merge_configs(&cargo_json, path)?;
         Ok(config)
     }
@@ -27,6 +90,7 @@ impl Metadata {
         cargo_json: &cargo_metadata::Metadata,
         path: &std::path::Path,
     ) -> anyhow::Result<Value> {
+        log::debug!("merging cargo metadata from {}", path.display());
         let mut metadata = crate::config::Config::defaults_as_json()?;
         crate::config::Config::json_merge(
             &mut metadata,
@@ -65,9 +129,10 @@ impl Metadata {
 
     /// Convert a `Cargo.toml` to JSON
     fn get_cargo_toml_as_json(
-        path: &std::path::PathBuf,
+        &mut self,
+        path: &std::path::Path,
     ) -> anyhow::Result<cargo_metadata::Metadata> {
-        Ok(MetadataCommand::new().current_dir(path).exec()?)
+        self.get_metadata(Some(path)).cloned()
     }
 
     /// Get any `rust-gpu` metadata set in the crate's `Cargo.toml`
@@ -136,7 +201,7 @@ mod test {
             .exec()
             .unwrap();
         metadata.packages.first_mut().unwrap().metadata = serde_json::json!({});
-        let configs = Metadata::merge_configs(&metadata, Path::new("./")).unwrap();
+        let configs = MetadataCache::merge_configs(&metadata, Path::new("./")).unwrap();
         assert_eq!(configs["build"]["release"], Value::Bool(true));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],
@@ -160,7 +225,7 @@ mod test {
                 }
             }
         });
-        let configs = Metadata::merge_configs(&metadata, Path::new("./")).unwrap();
+        let configs = MetadataCache::merge_configs(&metadata, Path::new("./")).unwrap();
         assert_eq!(configs["build"]["release"], Value::Bool(false));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],
@@ -189,7 +254,7 @@ mod test {
                 }
             }
         });
-        let configs = Metadata::merge_configs(&metadata, Path::new(".")).unwrap();
+        let configs = MetadataCache::merge_configs(&metadata, Path::new(".")).unwrap();
         assert_eq!(configs["build"]["release"], Value::Bool(false));
         assert_eq!(
             configs["install"]["auto_install_rust_toolchain"],

@@ -68,6 +68,7 @@ mod target_specs;
 mod test;
 
 pub use install::*;
+pub use metadata::MetadataCache;
 pub use spirv_builder;
 
 /// Central function to write to the user.
@@ -120,12 +121,19 @@ impl Command {
     /// # Errors
     /// Any errors during execution, usually printed to the user
     #[inline]
-    pub fn run(&self, env_args: Vec<String>) -> anyhow::Result<()> {
+    pub fn run(
+        &self,
+        env_args: Vec<String>,
+        metadata_cache: &mut metadata::MetadataCache,
+    ) -> anyhow::Result<()> {
         match &self {
             Self::Install(install) => {
                 let shader_crate_path = &install.shader_crate;
-                let command =
-                    config::Config::clap_command_with_cargo_config(shader_crate_path, env_args)?;
+                let command = config::Config::clap_command_with_cargo_config(
+                    shader_crate_path,
+                    env_args,
+                    metadata_cache,
+                )?;
                 log::debug!(
                     "installing with final merged arguments: {:#?}",
                     command.install
@@ -134,8 +142,11 @@ impl Command {
             }
             Self::Build(build) => {
                 let shader_crate_path = &build.install.shader_crate;
-                let mut command =
-                    config::Config::clap_command_with_cargo_config(shader_crate_path, env_args)?;
+                let mut command = config::Config::clap_command_with_cargo_config(
+                    shader_crate_path,
+                    env_args,
+                    metadata_cache,
+                )?;
                 log::debug!("building with final merged arguments: {command:#?}");
 
                 if command.build.watch {

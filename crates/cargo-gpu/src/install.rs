@@ -64,9 +64,16 @@ impl InstalledBackend {
 #[derive(clap::Parser, Debug, Clone, serde::Deserialize, serde::Serialize)]
 #[non_exhaustive]
 pub struct Install {
+    /// Cargo target to compile.
+    ///
+    /// Conflicts with `--shader-crate`.
+    #[clap(short, long, conflicts_with("shader_crate"))]
+    pub package: Option<String>,
+
     /// Directory containing the shader crate to compile.
-    #[clap(long, alias("package"), short_alias('p'), default_value = "./")]
-    #[serde(alias = "package")]
+    ///
+    /// Conflicts with `--package` or `-p`.
+    #[clap(long, default_value = "./", conflicts_with("package"))]
     pub shader_crate: PathBuf,
 
     #[expect(
@@ -132,6 +139,7 @@ impl Install {
     #[must_use]
     pub const fn from_shader_crate(shader_crate: PathBuf) -> Self {
         Self {
+            package: None,
             shader_crate,
             spirv_builder_source: None,
             spirv_builder_version: None,
