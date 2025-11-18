@@ -4,6 +4,7 @@ use crate::spirv_source::{
     get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
 };
 use crate::target_specs::update_target_specs_files;
+use crate::MetadataCache;
 use crate::{cache_dir, spirv_source::SpirvSource};
 use anyhow::Context as _;
 use spirv_builder::SpirvBuilder;
@@ -148,6 +149,24 @@ impl Install {
             clear_target: true,
             force_overwrite_lockfiles_v4_to_v3: false,
         }
+    }
+
+    /// Resolves a possible workspace package passed with `-p {package}` to its shader crate path,
+    /// as if it had been passed with `--shader-crate {package-parent-path}`.
+    ///
+    /// If no such package was passed, this resolves to the shader crate passed, or the default.
+    ///
+    /// ## Errors
+    /// Errs if the metadata cache cannot resolve the shader crate.
+    /// See [`MetadataCache::resolve_package_to_shader_crate`] for more info.
+    pub fn get_resolved_shader_crate(
+        &self,
+        metadata: &mut MetadataCache,
+    ) -> anyhow::Result<std::path::PathBuf> {
+        self.package.as_ref().map_or_else(
+            || Ok(self.shader_crate.clone()),
+            |package| metadata.resolve_package_to_shader_crate(package),
+        )
     }
 
     /// Create the `rustc_codegen_spirv_dummy` crate that depends on `rustc_codegen_spirv`
