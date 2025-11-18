@@ -61,9 +61,7 @@ impl Build {
         let installed_backend = self.install.run()?;
         let mut metadata = crate::metadata::MetadataCache::default();
 
-        if let Some(package) = self.install.package.as_ref() {
-            self.install.shader_crate = metadata.resolve_package_to_shader_crate(package)?;
-        }
+        self.install.shader_crate = self.install.get_resolved_shader_crate(&mut metadata)?;
 
         let _lockfile_mismatch_handler = LockfileMismatchHandler::new(
             &self.install.shader_crate,
