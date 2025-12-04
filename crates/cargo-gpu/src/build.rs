@@ -6,7 +6,7 @@ use crate::install::Install;
 use crate::linkage::Linkage;
 use crate::lockfile::LockfileMismatchHandler;
 use anyhow::Context as _;
-use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder};
+use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder, SpirvBuilderError};
 use std::io::Write as _;
 use std::path::PathBuf;
 
@@ -95,17 +95,22 @@ impl Build {
         );
 
         if self.build.watch {
-            let this = self.clone();
-            self.build
-                .spirv_builder
-                .watch(move |result, accept| {
-                    let result1 = this.parse_compilation_result(&result);
-                    if let Some(accept) = accept {
-                        accept.submit(result1);
+            let mut watcher = self.build.spirv_builder.clone().watch()?;
+            loop {
+                // if the build fails "regularly", eg. `cargo build` fails and nothing else, just retry
+                crate::user_output!(
+                    "Compiling shaders at {}...\n",
+                    self.install.shader_crate.display()
+                );
+                match watcher.recv() {
+                    Ok(result) => {
+                        self.parse_compilation_result(&result)?;
+                        crate::user_output!("Build successful!\n");
                     }
-                })?
-                .context("unreachable")??;
-            std::thread::park();
+                    Err(SpirvBuilderError::BuildFailed) => crate::user_output!("Build failed!\n"),
+                    Err(err) => return Err(anyhow::Error::from(err)),
+                }
+            }
         } else {
             crate::user_output!(
                 "Compiling shaders at {}...\n",
