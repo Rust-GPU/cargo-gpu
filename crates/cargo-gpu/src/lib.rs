@@ -74,7 +74,7 @@ pub use spirv_builder;
 /// Central function to write to the user.
 #[macro_export]
 macro_rules! user_output {
-    ($($args: tt)*) => {
+    ($($args: tt)*) => { {
         #[allow(
             clippy::allow_attributes,
             clippy::useless_attribute,
@@ -92,7 +92,7 @@ macro_rules! user_output {
         }
         print!($($args)*);
         std::io::stdout().flush().unwrap();
-   }
+   } }
 }
 
 /// All of the available subcommands for `cargo gpu`

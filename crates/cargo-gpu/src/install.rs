@@ -299,7 +299,7 @@ package = "rustc_codegen_spirv"
                 cargo.args(["-p", "rustc_codegen_spirv", "--lib"]);
             }
 
-            log::debug!("building artifacts with `{cargo}`");
+            log::debug!("building artifacts with `{cargo:?}`");
             cargo
                 .stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit())
