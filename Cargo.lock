@@ -1036,7 +1036,7 @@ checksum = "6c89eaf493b3dfc730cda42a77014aad65e03213992c7afe0dff60a9f7d3dd94"
 [[package]]
 name = "rustc_codegen_spirv-types"
 version = "0.9.0"
-source = "git+https://github.com/Rust-GPU/rust-gpu?rev=3df836eb9d7b01344f52737bf9a310d1fb5a0c26#3df836eb9d7b01344f52737bf9a310d1fb5a0c26"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=b3219437e5a6fd83f6a5e8754d13ed73fc2c8bfe#b3219437e5a6fd83f6a5e8754d13ed73fc2c8bfe"
 dependencies = [
  "rspirv",
  "serde",
@@ -1216,7 +1216,7 @@ dependencies = [
 [[package]]
 name = "spirv-builder"
 version = "0.9.0"
-source = "git+https://github.com/Rust-GPU/rust-gpu?rev=3df836eb9d7b01344f52737bf9a310d1fb5a0c26#3df836eb9d7b01344f52737bf9a310d1fb5a0c26"
+source = "git+https://github.com/Rust-GPU/rust-gpu?rev=b3219437e5a6fd83f6a5e8754d13ed73fc2c8bfe#b3219437e5a6fd83f6a5e8754d13ed73fc2c8bfe"
 dependencies = [
  "cargo_metadata",
  "clap",
