@@ -48,10 +48,6 @@ pub enum SpirvSource {
 }
 
 impl core::fmt::Display for SpirvSource {
-    #[expect(
-        clippy::min_ident_chars,
-        reason = "It's a core library trait implementation"
-    )]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::CratesIO(version) => version.fmt(f),
