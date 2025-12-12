@@ -5,13 +5,14 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
 
 env:
   # For setup-rust, see https://github.com/moonrepo/setup-rust/issues/22
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  install-and-build-shaders:
+  test-os:
     strategy:
       fail-fast: false
       matrix:
@@ -19,49 +20,59 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
-        rust-gpu-version: [latest]
-        include:
+    runs-on: ${{ matrix.os }}
+    env:
+      RUST_LOG: debug
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall cargo-nextest
+      - run: cargo fetch --locked
+      - name: shader-crate-template cargo fetch --locked
+        run: |
+          cd ./crates/shader-crate-template
+          cargo fetch --locked
+      - run: cargo nextest run
+      - name: Run a full build
+        run: cargo xtask test-build
+
+  test-rust-gpu-releases:
+    strategy:
+      fail-fast: false
+      matrix:
+        rust-gpu-version:
           # As well as testing on each OS, we also want to test to make sure we're still supporting
           # older versions of `rust-gpu`. However, we can assume that these tests are already okay
           # across platforms, so we only need to test on Linux, the chepeast in terms of minutes.
           #
           # `0.7.0` currently fails building `spirv-builder-cli` with:
           #    """
-          #    package `is_terminal_polyfill v1.70.1` cannot be built because it requires rustc 
+          #    package `is_terminal_polyfill v1.70.1` cannot be built because it requires rustc
           #    1.70.0 or newer, while the currently active rustc version is 1.69.0-nightly
           #    """
           # It's probably easily fixable. But also `0.7.0` was released in April 2023, so there's
           # unlikely many users of it?
-          - os: ubuntu-latest
-            rust-gpu-version: 0.8.0
-          - os: ubuntu-latest
-            rust-gpu-version: 0.9.0
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
+          - 0.8.0
+          - 0.9.0
+    runs-on: ubuntu-latest
     env:
       RUST_LOG: debug
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch root dependencies
-        run: cargo fetch --locked
-      - name: Fetch shader-crate-template dependencies
-        run: |
-          cd ./crates/shader-crate-template
-          cargo fetch --locked
-      - run: cargo test
       - name: Run a full build
         run: cargo xtask test-build --rust-gpu-version ${{ matrix.rust-gpu-version }}
-          
+
   lints:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: cargo-bins/cargo-binstall@main
-      - name: Install cargo-shear
-        run: cargo binstall cargo-shear
+      - run: cargo binstall cargo-shear
       - run: cargo fetch --locked
       - run: cargo clippy -- --deny warnings
       - run: cargo fmt --check
       - run: cargo shear
+
+defaults:
+  run:
+    shell: bash
