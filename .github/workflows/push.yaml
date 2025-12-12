@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust-gpu-version:
+        include:
           # As well as testing on each OS, we also want to test to make sure we're still supporting
           # older versions of `rust-gpu`. However, we can assume that these tests are already okay
           # across platforms, so we only need to test on Linux, the chepeast in terms of minutes.
@@ -52,13 +52,18 @@ jobs:
           #    """
           # It's probably easily fixable. But also `0.7.0` was released in April 2023, so there's
           # unlikely many users of it?
-          - 0.8.0
-          - 0.9.0
+          - rust-gpu-version: 0.8.0
+            glam-version: 0.24.2
+          - rust-gpu-version: 0.9.0
+            glam-version: 0.24.2
     runs-on: ubuntu-latest
     env:
       RUST_LOG: debug
     steps:
       - uses: actions/checkout@v4
+      - if: ${{ matrix.glam-version }}
+        name: set glam version
+        run: cargo xtask set-dependency glam ${{ matrix.glam-version }}
       - name: Run a full build
         run: cargo xtask test-build --rust-gpu-version ${{ matrix.rust-gpu-version }}
 

@@ -24,6 +24,16 @@ enum Cli {
         #[clap(long)]
         glam_version: Option<String>,
     },
+    /// Set a dependency in the shader-crate-template to some version
+    SetDependency {
+        /// the dependency to modify
+        package: String,
+        /// the version to set it to
+        version: String,
+        /// the git repo to use, if version is a commit rev
+        #[clap(long)]
+        git: Option<String>,
+    },
 }
 
 fn cmd(args: impl IntoIterator<Item = impl AsRef<str>>) -> anyhow::Result<()> {
@@ -51,10 +61,16 @@ struct ShaderCrateTemplateCargoTomlWriter {
     original_shader_crate_lock_file: String,
     /// Parsed toml table
     table: toml::Table,
+    /// false will reset Cargo.toml when this is dropped
+    persistent: bool,
 }
 
 impl Drop for ShaderCrateTemplateCargoTomlWriter {
     fn drop(&mut self) {
+        if self.persistent {
+            return;
+        }
+
         log::info!("reverting overwrite of Cargo.toml");
         std::fs::write(
             format!("{SHADER_CRATE_PATH}/Cargo.toml"),
@@ -70,9 +86,15 @@ impl Drop for ShaderCrateTemplateCargoTomlWriter {
     }
 }
 
+impl Default for ShaderCrateTemplateCargoTomlWriter {
+    fn default() -> Self {
+        Self::new(false)
+    }
+}
+
 impl ShaderCrateTemplateCargoTomlWriter {
     /// Create a new one
-    fn new() -> Self {
+    fn new(persistent: bool) -> Self {
         let original_shader_crate_template_str =
             std::fs::read_to_string(format!("{SHADER_CRATE_PATH}/Cargo.toml")).unwrap();
         let table = toml::from_str::<toml::Table>(&original_shader_crate_template_str).unwrap();
@@ -82,6 +104,7 @@ impl ShaderCrateTemplateCargoTomlWriter {
             original_shader_crate_template_str,
             original_shader_crate_lock_file,
             table,
+            persistent,
         }
     }
 
@@ -229,7 +252,7 @@ fn main() -> anyhow::Result<()> {
             cmd(["cargo", "install", "--path", "crates/cargo-gpu"])?;
 
             log::info!("setup project");
-            let mut overwriter = ShaderCrateTemplateCargoTomlWriter::new();
+            let mut overwriter = ShaderCrateTemplateCargoTomlWriter::default();
             let dir = tempfile::TempDir::with_prefix("test-shader-output")?;
             overwriter.replace_output_dir(dir.path())?;
             if let Some(rust_gpu_version) = rust_gpu_version.as_ref() {
@@ -254,6 +277,17 @@ fn main() -> anyhow::Result<()> {
             cmd(["ls", "-lah", dir.path().to_str().unwrap()])?;
             //NOTE: manifest.json is the default value here, which should be valid
             cmd(["cat", dir.path().join("manifest.json").to_str().unwrap()])?;
+        }
+        Cli::SetDependency {
+            package,
+            version,
+            git,
+        } => {
+            let mut overwriter = ShaderCrateTemplateCargoTomlWriter::new(true);
+            overwriter.set_dependency(
+                package.clone(),
+                &DependencyVersion::parse(version.clone(), git.clone())?,
+            )?;
         }
     }
     Ok(())
