@@ -40,7 +40,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust-gpu-version:
+        glam-version: [latest]
+        include:
           # As well as testing on each OS, we also want to test to make sure we're still supporting
           # older versions of `rust-gpu`. However, we can assume that these tests are already okay
           # across platforms, so we only need to test on Linux, the chepeast in terms of minutes.
@@ -52,29 +53,49 @@ jobs:
           #    """
           # It's probably easily fixable. But also `0.7.0` was released in April 2023, so there's
           # unlikely many users of it?
-          - 0.8.0
-          - 0.9.0
+          - rust-gpu-version: 0.8.0
+          - rust-gpu-version: 0.9.0
 
           # target spec introduction
           # last version before
-          - cc752312c3de6813a41189e46476d5c1be5e0bbe
-          # first version
-          - 02cefd101014f66b79dffb20a2c2b5b7c9038401
+          # * fails: compiler too old, `serde` using `#[diagnostic]`
+#          - rust-gpu-version: cc752312c3de6813a41189e46476d5c1be5e0bbe
+#            glam-version: 0.30.7
+          # first version requiring target specs
+          # * fails: target spec mismatch!
+          # * resolution: Since this is just a few commits, I'd be fine ignoring it.
+#          - rust-gpu-version: 02cefd101014f66b79dffb20a2c2b5b7c9038401
+#            glam-version: 0.30.7
           # target specs change again just a few commits later
-          - bbb61f58b3d24f3f64745050eb214b90bf6dcce9
+          # * fails: compiler too old, `proc-macro2` using `Literal::byte_character`.
+          # * resolution: want to support, can't be bothered to hack in old proc-macro2 versions
+#          - rust-gpu-version: bbb61f58b3d24f3f64745050eb214b90bf6dcce9
+#            glam-version: 0.30.7
+
+          # testing rustc 1.5 months later
+          - rust-gpu-version: eea8998df9dc2fd8e7a65c5b5b7ae20c238a665a
+            glam-version: 0.30.7
 
           # just after target specs v2 refactor
           # before
-          - a547c6e45266d613d9fec673e869d7a96181e47b
+          - rust-gpu-version: a547c6e45266d613d9fec673e869d7a96181e47b
+            glam-version: 0.30.7
           # after
-          - 2326b87fe1542eeb898065e36ac949307b55386d
+          - rust-gpu-version: 2326b87fe1542eeb898065e36ac949307b55386d
+            glam-version: 0.30.7
+
+          # glam semver breakage due to vector type refactor
+          # before, glam fixed to 0.30.7 in this commit
+          - rust-gpu-version: f79c4181a5dc2d37303947b113f190930c6c1ce6
+          # after, glam >0.30.8
+          - rust-gpu-version: e767f24f2565baf1a71bbaf84d453d181cab2417
     runs-on: ubuntu-latest
     env:
       RUST_LOG: debug
     steps:
       - uses: actions/checkout@v4
       - name: Run a full build
-        run: cargo xtask test-build --rust-gpu-version ${{ matrix.rust-gpu-version }}
+        run: cargo xtask test-build --rust-gpu-version ${{ matrix.rust-gpu-version }} --glam-version ${{ matrix.glam-version }}
 
   lint:
     runs-on: ubuntu-latest
