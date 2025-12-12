@@ -54,6 +54,20 @@ jobs:
           # unlikely many users of it?
           - 0.8.0
           - 0.9.0
+
+          # target spec introduction
+          # last version before
+          - cc752312c3de6813a41189e46476d5c1be5e0bbe
+          # first version
+          - 02cefd101014f66b79dffb20a2c2b5b7c9038401
+          # target specs change again just a few commits later
+          - bbb61f58b3d24f3f64745050eb214b90bf6dcce9
+
+          # just after target specs v2 refactor
+          # before
+          - a547c6e45266d613d9fec673e869d7a96181e47b
+          # after
+          - 2326b87fe1542eeb898065e36ac949307b55386d
     runs-on: ubuntu-latest
     env:
       RUST_LOG: debug
