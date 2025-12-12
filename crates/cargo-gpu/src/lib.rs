@@ -128,9 +128,12 @@ impl Command {
     ) -> anyhow::Result<()> {
         match &self {
             Self::Install(install) => {
-                let shader_crate_path = &install.shader_crate;
+                // NOTE: Here `install` is only used for its `shader_crate` field, the rest is
+                // not used, as config::Config::clap_command_with_cargo_config reconstructs
+                // the command from the environment.
+                let shader_crate_path = install.get_resolved_shader_crate(metadata_cache)?;
                 let command = config::Config::clap_command_with_cargo_config(
-                    shader_crate_path,
+                    &shader_crate_path,
                     env_args,
                     metadata_cache,
                 )?;
@@ -141,9 +144,12 @@ impl Command {
                 command.install.run()?;
             }
             Self::Build(build) => {
-                let shader_crate_path = &build.install.shader_crate;
+                // NOTE: Here `build` is only used for its `shader_crate` field, the rest is
+                // not used, as config::Config::clap_command_with_cargo_config reconstructs
+                // the command from the environment.
+                let shader_crate_path = build.install.get_resolved_shader_crate(metadata_cache)?;
                 let mut command = config::Config::clap_command_with_cargo_config(
-                    shader_crate_path,
+                    &shader_crate_path,
                     env_args,
                     metadata_cache,
                 )?;
