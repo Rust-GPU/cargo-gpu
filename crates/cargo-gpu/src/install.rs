@@ -196,6 +196,11 @@ edition = "2021"
 [dependencies.spirv-builder]
 package = "rustc_codegen_spirv"
 {version_spec}
+
+[dependencies]
+elsa = {{ version = "=1.11.2", features = ["indexmap"] }}
+indexmap = "1.7.0"
+indexmap2 = {{ package = "indexmap", version = "=2.11.4" }}
             "#
             );
             std::fs::write(checkout.join("Cargo.toml"), cargo_toml)
