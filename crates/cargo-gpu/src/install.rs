@@ -3,7 +3,6 @@
 use crate::spirv_source::{
     get_channel_from_rustc_codegen_spirv_build_script, query_metadata, FindPackage as _,
 };
-use crate::target_specs::update_target_specs_files;
 use crate::{cache_dir, spirv_source::SpirvSource};
 use anyhow::Context as _;
 use spirv_builder::SpirvBuilder;
@@ -17,8 +16,6 @@ pub struct InstalledBackend {
     pub rustc_codegen_spirv_location: PathBuf,
     /// toolchain channel name
     pub toolchain_channel: String,
-    /// directory with target-specs json files
-    pub target_spec_dir: PathBuf,
 }
 
 impl InstalledBackend {
@@ -48,10 +45,6 @@ impl InstalledBackend {
     pub fn configure_spirv_builder(&self, builder: &mut SpirvBuilder) -> anyhow::Result<()> {
         builder.rustc_codegen_spirv_location = Some(self.rustc_codegen_spirv_location.clone());
         builder.toolchain_overwrite = Some(self.toolchain_channel.clone());
-        builder.path_to_target_spec = Some(self.target_spec_dir.join(format!(
-            "{}.json",
-            builder.target.as_ref().context("expect target to be set")?
-        )));
         Ok(())
     }
 }
@@ -270,10 +263,6 @@ package = "rustc_codegen_spirv"
             )?;
         log::info!("selected toolchain channel `{toolchain_channel:?}`");
 
-        log::debug!("update_spec_files");
-        let target_spec_dir = update_target_specs_files(&source, &dummy_metadata, !skip_rebuild)
-            .context("writing target spec files")?;
-
         log::debug!("ensure_toolchain_and_components_exist");
         crate::install_toolchain::ensure_toolchain_and_components_exist(
             &toolchain_channel,
@@ -336,7 +325,6 @@ package = "rustc_codegen_spirv"
         Ok(InstalledBackend {
             rustc_codegen_spirv_location: dest_dylib_path,
             toolchain_channel,
-            target_spec_dir,
         })
     }
 }
