@@ -155,23 +155,21 @@ impl ShaderCrateTemplateCargoTomlWriter {
     }
 
     /// Add or replace a dependency in the shader-crate-template
-    fn set_dependency(
-        &mut self,
-        package: String,
-        version: &DependencyVersion,
-    ) -> anyhow::Result<()> {
-        if let Some(version) = version.to_toml() {
-            let dependencies = self.get_cargo_dependencies_table();
-            dependencies.insert(package, version);
+    fn set_dependency(&mut self, package: &str, version: &DependencyVersion) -> anyhow::Result<()> {
+        let dependencies = self.get_cargo_dependencies_table();
+        if let Some(value) = dependencies.get_mut(package) {
+            version.modify_toml(value);
             self.write_shader_crate_cargo_toml_changes()?;
+            Ok(())
+        } else {
+            anyhow::bail!("Crate `{package}` not found")
         }
-        Ok(())
     }
 
     /// Replace the `spirv-std` dependency version
     fn set_spirv_std_version(&mut self, version: &str) -> anyhow::Result<()> {
         self.set_dependency(
-            "spirv-std".into(),
+            "spirv-std",
             &DependencyVersion::parse(
                 version.into(),
                 Some("https://github.com/Rust-GPU/rust-gpu".into()),
@@ -182,7 +180,7 @@ impl ShaderCrateTemplateCargoTomlWriter {
     /// Replace the `glam` dependency version
     fn set_dependency_glam(&mut self, version: &str) -> anyhow::Result<()> {
         self.set_dependency(
-            "glam".into(),
+            "glam",
             &DependencyVersion::parse(
                 version.into(),
                 Some("https://github.com/bitshifter/glam-rs".into()),
@@ -227,14 +225,33 @@ impl DependencyVersion {
 
     /// Convert this version to a toml value, may fail if we want the latest version
     #[must_use]
-    pub fn to_toml(&self) -> Option<toml::Value> {
+    pub fn to_toml(&self) -> Option<toml::Table> {
         match self {
             Self::Latest => None,
-            Self::Crates(version) => Some(toml::Value::String(version.clone())),
-            Self::Git { git, rev } => Some(toml::Value::Table(toml::Table::from_iter([
+            Self::Crates(version) => Some(toml::Table::from_iter([(
+                "version".to_owned(),
+                toml::Value::String(version.clone()),
+            )])),
+            Self::Git { git, rev } => Some(toml::Table::from_iter([
                 ("git".to_owned(), toml::Value::String(git.clone())),
                 ("rev".to_owned(), toml::Value::String(rev.clone())),
-            ]))),
+            ])),
+        }
+    }
+
+    /// Convert this version to a toml value, may fail if we want the latest version
+    pub fn modify_toml(&self, toml: &mut toml::Value) {
+        if let Some(mut table) = self.to_toml() {
+            let mut copy = |key: &str| {
+                if let Some(src_table) = toml.as_table_mut() {
+                    if let Some(value) = src_table.remove(key) {
+                        table.insert(key.to_owned(), value);
+                    }
+                }
+            };
+            copy("default-features");
+            copy("features");
+            *toml = toml::Value::Table(table);
         }
     }
 }
@@ -285,7 +302,7 @@ fn main() -> anyhow::Result<()> {
         } => {
             let mut overwriter = ShaderCrateTemplateCargoTomlWriter::new(true);
             overwriter.set_dependency(
-                package.clone(),
+                package,
                 &DependencyVersion::parse(version.clone(), git.clone())?,
             )?;
         }

@@ -10,6 +10,7 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 # TODO: use a simple crate version once v0.10.0 is released
 spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "2aa4d4f8a8ba73103501562cfca17b8163e5a887" }
+glam = { version = "0.30.8", default-features = false }
 
 [package.metadata.rust-gpu.build]
 # Where to output the compiled shader. Defaults to where `cargo gpu` is called from.
