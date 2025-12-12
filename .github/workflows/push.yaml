@@ -62,7 +62,7 @@ jobs:
       - name: Run a full build
         run: cargo xtask test-build --rust-gpu-version ${{ matrix.rust-gpu-version }}
 
-  lints:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,6 +72,21 @@ jobs:
       - run: cargo clippy -- --deny warnings
       - run: cargo fmt --check
       - run: cargo shear
+
+  # This allows us to have a single job we can branch protect on, rather than needing
+  # to update the branch protection rules when the test matrix changes
+  test_success:
+    runs-on: ubuntu-24.04
+    needs: [test-os, test-rust-gpu-releases, lint]
+    # Hack for buggy GitHub Actions behavior with skipped checks: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks#handling-skipped-but-required-checks
+    if: ${{ always() }}
+    steps:
+      # Another hack is to actually check the status of the dependencies or else it'll fall through
+      - run: |
+          echo "Checking statuses..."
+          [[ "${{ needs.test-os.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.test-rust-gpu-releases.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.lint.result }}" == "success" ]] || exit 1
 
 defaults:
   run:
