@@ -20,6 +20,9 @@ enum Cli {
         /// Build using the specified version of `spirv-std`.
         #[clap(long)]
         rust_gpu_version: Option<String>,
+        /// The version of glam to use
+        #[clap(long)]
+        glam_version: Option<String>,
     },
 }
 
@@ -128,52 +131,112 @@ impl ShaderCrateTemplateCargoTomlWriter {
         Ok(())
     }
 
-    /// Replace the `spirv-std` dependency version
-    fn replace_spirv_std_version(&mut self, version: String) -> anyhow::Result<()> {
-        let dependencies = self.get_cargo_dependencies_table();
-        let spirv_std = dependencies.get_mut("spirv-std").unwrap();
-        if version.contains('.') {
-            // semver
-            *spirv_std = toml::Value::String(version);
-        } else {
-            // git rev
-            *spirv_std = toml::Value::Table(toml::Table::from_iter([
-                (
-                    "git".to_owned(),
-                    toml::Value::String("https://github.com/Rust-GPU/rust-gpu".to_owned()),
-                ),
-                ("rev".to_owned(), toml::Value::String(version)),
-            ]));
+    /// Add or replace a dependency in the shader-crate-template
+    fn set_dependency(
+        &mut self,
+        package: String,
+        version: &DependencyVersion,
+    ) -> anyhow::Result<()> {
+        if let Some(version) = version.to_toml() {
+            let dependencies = self.get_cargo_dependencies_table();
+            dependencies.insert(package, version);
+            self.write_shader_crate_cargo_toml_changes()?;
         }
-        self.write_shader_crate_cargo_toml_changes()?;
         Ok(())
+    }
+
+    /// Replace the `spirv-std` dependency version
+    fn set_spirv_std_version(&mut self, version: &str) -> anyhow::Result<()> {
+        self.set_dependency(
+            "spirv-std".into(),
+            &DependencyVersion::parse(
+                version.into(),
+                Some("https://github.com/Rust-GPU/rust-gpu".into()),
+            )?,
+        )
+    }
+
+    /// Replace the `glam` dependency version
+    fn set_dependency_glam(&mut self, version: &str) -> anyhow::Result<()> {
+        self.set_dependency(
+            "glam".into(),
+            &DependencyVersion::parse(
+                version.into(),
+                Some("https://github.com/bitshifter/glam-rs".into()),
+            )?,
+        )
+    }
+}
+
+/// The version of a dependency
+#[non_exhaustive]
+pub enum DependencyVersion {
+    /// Don't change anything, don't replace the dependency nor add it when it's not there.
+    Latest,
+    /// A version dependency for crates.io
+    Crates(String),
+    /// A git dependency on a specific rev
+    Git {
+        /// git repo
+        git: String,
+        /// git commit revision
+        rev: String,
+    },
+}
+
+impl DependencyVersion {
+    /// Try to parse a version from a string
+    ///
+    /// # Errors
+    /// if `version` is a commit rev, `git` must be specified
+    pub fn parse(version: String, git: Option<String>) -> anyhow::Result<Self> {
+        if version == "latest" {
+            Ok(Self::Latest)
+        } else if version.contains('.') {
+            Ok(Self::Crates(version))
+        } else {
+            Ok(Self::Git {
+                git: git.context("specifying a revision requires a git repo")?,
+                rev: version,
+            })
+        }
+    }
+
+    /// Convert this version to a toml value, may fail if we want the latest version
+    #[must_use]
+    pub fn to_toml(&self) -> Option<toml::Value> {
+        match self {
+            Self::Latest => None,
+            Self::Crates(version) => Some(toml::Value::String(version.clone())),
+            Self::Git { git, rev } => Some(toml::Value::Table(toml::Table::from_iter([
+                ("git".to_owned(), toml::Value::String(git.clone())),
+                ("rev".to_owned(), toml::Value::String(rev.clone())),
+            ]))),
+        }
     }
 }
 
 /// Run the xtask.
-fn main() {
+fn main() -> anyhow::Result<()> {
     env_logger::builder().init();
-
     let cli = Cli::parse();
-
-    match cli {
+    match &cli {
         Cli::TestBuild {
-            rust_gpu_version: maybe_rust_gpu_version,
+            rust_gpu_version,
+            glam_version,
         } => {
             log::info!("installing cargo gpu");
-            cmd(["cargo", "install", "--path", "crates/cargo-gpu"]).unwrap();
+            cmd(["cargo", "install", "--path", "crates/cargo-gpu"])?;
 
             log::info!("setup project");
-            let dir = tempfile::TempDir::with_prefix("test-shader-output").unwrap();
             let mut overwriter = ShaderCrateTemplateCargoTomlWriter::new();
-            overwriter.replace_output_dir(dir.path()).unwrap();
-
-            if let Some(rust_gpu_version) = maybe_rust_gpu_version {
-                if rust_gpu_version != "latest" {
-                    overwriter
-                        .replace_spirv_std_version(rust_gpu_version)
-                        .unwrap();
-                }
+            let dir = tempfile::TempDir::with_prefix("test-shader-output")?;
+            overwriter.replace_output_dir(dir.path())?;
+            if let Some(rust_gpu_version) = rust_gpu_version.as_ref() {
+                overwriter.set_spirv_std_version(rust_gpu_version)?;
+            }
+            if let Some(glam_version) = glam_version.as_ref() {
+                overwriter.set_dependency_glam(glam_version)?;
             }
 
             log::info!("building with auto-install");
@@ -186,12 +249,12 @@ fn main() {
                 "--auto-install-rust-toolchain",
                 "--rebuild-codegen",
                 "--force-overwrite-lockfiles-v4-to-v3",
-            ])
-            .unwrap();
+            ])?;
 
-            cmd(["ls", "-lah", dir.path().to_str().unwrap()]).unwrap();
+            cmd(["ls", "-lah", dir.path().to_str().unwrap()])?;
             //NOTE: manifest.json is the default value here, which should be valid
-            cmd(["cat", dir.path().join("manifest.json").to_str().unwrap()]).unwrap();
+            cmd(["cat", dir.path().join("manifest.json").to_str().unwrap()])?;
         }
     }
+    Ok(())
 }
