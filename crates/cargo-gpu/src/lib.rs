@@ -64,7 +64,6 @@ mod lockfile;
 mod metadata;
 mod show;
 mod spirv_source;
-mod target_specs;
 mod test;
 
 pub use install::*;
