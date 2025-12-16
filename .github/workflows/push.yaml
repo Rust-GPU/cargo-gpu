@@ -36,7 +36,7 @@ jobs:
       - name: Run a full build
         run: cargo xtask test-build
 
-  test-rust-gpu-releases:
+  test-rust-gpu:
     strategy:
       fail-fast: false
       matrix:
@@ -117,7 +117,7 @@ jobs:
   # to update the branch protection rules when the test matrix changes
   test_success:
     runs-on: ubuntu-24.04
-    needs: [test-os, test-rust-gpu-releases, lint]
+    needs: [test-os, test-rust-gpu, lint]
     # Hack for buggy GitHub Actions behavior with skipped checks: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks#handling-skipped-but-required-checks
     if: ${{ always() }}
     steps:
@@ -125,7 +125,7 @@ jobs:
       - run: |
           echo "Checking statuses..."
           [[ "${{ needs.test-os.result }}" == "success" ]] || exit 1
-          [[ "${{ needs.test-rust-gpu-releases.result }}" == "success" ]] || exit 1
+          [[ "${{ needs.test-rust-gpu.result }}" == "success" ]] || exit 1
           [[ "${{ needs.lint.result }}" == "success" ]] || exit 1
 
 defaults:
