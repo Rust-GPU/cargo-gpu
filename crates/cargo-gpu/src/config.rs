@@ -31,7 +31,7 @@ impl Config {
     ) -> anyhow::Result<crate::build::Build> {
         let mut config = metadata.as_json(shader_crate_path)?;
 
-        env_args.retain(|arg| !(arg == "build" || arg == "install"));
+        env_args.retain(|arg| !(arg == "build" || arg == "install" || arg == "clippy"));
         let cli_args_json = Self::cli_args_to_json(env_args)?;
         Self::json_merge(&mut config, cli_args_json, None)?;
 

@@ -21,14 +21,19 @@ pub struct BuildArgs {
     #[clap(long, short, action)]
     pub watch: bool,
 
-    /// the flattened [`SpirvBuilder`]
+    /// The flattened [`SpirvBuilder`]
     #[clap(flatten)]
     #[serde(flatten)]
     pub spirv_builder: SpirvBuilder,
 
-    ///Renames the manifest.json file to the given name
+    /// Renames the `manifest.json` file to the given name
     #[clap(long, short, default_value = "manifest.json")]
     pub manifest_file: String,
+
+    /// When building fails with [`SpirvBuilderError::NoArtifactProduced`], count it as a success anyway.
+    /// Used for e.g. `clippy`, which doesn't produce any artifacts. Defaults to false.
+    #[clap(skip)]
+    pub allow_no_artifacts: bool,
 }
 
 impl Default for BuildArgs {
@@ -39,6 +44,7 @@ impl Default for BuildArgs {
             watch: false,
             spirv_builder: SpirvBuilder::default(),
             manifest_file: String::from("manifest.json"),
+            allow_no_artifacts: false,
         }
     }
 }
@@ -116,8 +122,16 @@ impl Build {
                 "Compiling shaders at {}...\n",
                 self.install.shader_crate.display()
             );
-            let result = self.build.spirv_builder.build()?;
-            self.parse_compilation_result(&result)?;
+            let result = self.build.spirv_builder.build();
+            match result {
+                Ok(result) => {
+                    self.parse_compilation_result(&result)?;
+                }
+                // conditionally ignore NoArtifactProduced
+                Err(SpirvBuilderError::NoArtifactProduced { .. })
+                    if self.build.allow_no_artifacts => {}
+                Err(err) => return Err(err.into()),
+            }
         }
         Ok(())
     }
