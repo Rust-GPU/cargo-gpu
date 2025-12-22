@@ -104,6 +104,9 @@ pub enum Command {
     /// Compile a shader crate to SPIR-V.
     Build(Box<Build>),
 
+    /// Run clippy on a shader crate with a SPIR-V target
+    Clippy(Box<Build>),
+
     /// Show some useful values.
     Show(Show),
 
@@ -139,13 +142,17 @@ impl Command {
                 );
                 command.install.run()?;
             }
-            Self::Build(build) => {
+            Self::Build(build) | Self::Clippy(build) => {
                 let shader_crate_path = &build.install.shader_crate;
                 let mut command = config::Config::clap_command_with_cargo_config(
                     shader_crate_path,
                     env_args,
                     metadata_cache,
                 )?;
+                if let Self::Clippy(_) = self {
+                    command.build.spirv_builder.cargo_cmd = Some("clippy".into());
+                    command.build.allow_no_artifacts = true;
+                }
                 log::debug!("building with final merged arguments: {command:#?}");
 
                 if command.build.watch {
