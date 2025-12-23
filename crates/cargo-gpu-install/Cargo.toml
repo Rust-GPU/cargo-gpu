@@ -1,20 +1,20 @@
 [package]
-name = "cargo-gpu"
+name = "cargo-gpu-install"
 version.workspace = true
 edition.workspace = true
-description = "Generates shader .spv files from rust-gpu shader crates"
+description = "Install rust-gpu and it's required toolchain automatically"
 repository.workspace = true
 readme.workspace = true
 keywords.workspace = true
 license.workspace = true
-default-run = "cargo-gpu"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+test = ["dep:tempfile"]
 
 [dependencies]
 cargo_metadata.workspace = true
 anyhow.workspace = true
 spirv-builder = { workspace = true, features = ["clap", "watch"] }
-cargo-gpu-install.workspace = true
 clap.workspace = true
 directories.workspace = true
 env_logger.workspace = true
@@ -25,10 +25,9 @@ serde_json.workspace = true
 crossterm.workspace = true
 semver.workspace = true
 dunce.workspace = true
+tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]
-cargo-gpu-install = { workspace = true, features = ["test"] }
-tempfile.workspace = true
 test-log.workspace = true
 cargo_metadata = { workspace = true, features = ["builder"] }
 cargo-util-schemas = "0.8.2"

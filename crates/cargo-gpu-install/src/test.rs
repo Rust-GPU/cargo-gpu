@@ -1,5 +1,5 @@
 //! utilities for tests
-#![cfg(test)]
+#![cfg(any(feature = "test", test))]
 
 use anyhow::Context;
 use std::cell::RefCell;

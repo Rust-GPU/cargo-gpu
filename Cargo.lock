@@ -102,6 +102,29 @@ name = "cargo-gpu"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cargo-gpu-install",
+ "cargo-util-schemas",
+ "cargo_metadata",
+ "clap",
+ "crossterm",
+ "directories",
+ "dunce",
+ "env_logger",
+ "log",
+ "relative-path",
+ "semver",
+ "serde",
+ "serde_json",
+ "spirv-builder",
+ "tempfile",
+ "test-log",
+]
+
+[[package]]
+name = "cargo-gpu-install"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "cargo-util-schemas",
  "cargo_metadata",
  "clap",

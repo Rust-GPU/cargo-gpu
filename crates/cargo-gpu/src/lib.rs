@@ -1,4 +1,4 @@
-#![expect(clippy::pub_use, reason = "pub use for build scripts")]
+#![expect(clippy::pub_use, reason = "reexports from cargo_gpu_install crate")]
 
 //! Rust GPU shader crate builder.
 //!
@@ -50,68 +50,37 @@
 //! conduct other post-processing, like converting the `spv` files into `wgsl` files,
 //! for example.
 
-use crate::dump_usage::dump_full_usage_for_readme;
-use build::Build;
-use show::Show;
+#[cfg(test)]
+pub use cargo_gpu_install::test;
+pub use cargo_gpu_install::{cache_dir, install, spirv_builder, spirv_source, user_output};
+pub use metadata::MetadataCache;
 
 mod build;
 mod config;
 mod dump_usage;
-mod install;
-mod install_toolchain;
 mod linkage;
 mod lockfile;
 mod metadata;
 mod show;
-mod spirv_source;
-mod test;
-
-pub use install::*;
-pub use metadata::MetadataCache;
-pub use spirv_builder;
-
-/// Central function to write to the user.
-#[macro_export]
-macro_rules! user_output {
-    ($($args: tt)*) => { {
-        #[allow(
-            clippy::allow_attributes,
-            clippy::useless_attribute,
-            unused_imports,
-            reason = "`std::io::Write` is only sometimes called??"
-        )]
-        use std::io::Write as _;
-
-        #[expect(
-            clippy::non_ascii_literal,
-            reason = "CRAB GOOD. CRAB IMPORTANT."
-        )]
-        {
-            print!("🦀 ");
-        }
-        print!($($args)*);
-        std::io::stdout().flush().unwrap();
-   } }
-}
 
 /// All of the available subcommands for `cargo gpu`
 #[derive(clap::Subcommand)]
 #[non_exhaustive]
 pub enum Command {
     /// Install rust-gpu compiler artifacts.
-    Install(Box<Install>),
+    Install(Box<install::Install>),
 
     /// Compile a shader crate to SPIR-V.
-    Build(Box<Build>),
+    Build(Box<build::Build>),
 
     /// Run `cargo check` on the shader crate with a SPIR-V target without building the actual shaders
-    Check(Box<Build>),
+    Check(Box<build::Build>),
 
     /// Run clippy on a shader crate with a SPIR-V target
-    Clippy(Box<Build>),
+    Clippy(Box<build::Build>),
 
     /// Show some useful values.
-    Show(Show),
+    Show(show::Show),
 
     /// A hidden command that can be used to recursively print out all the subcommand help messages:
     ///   `cargo gpu dump-usage`
@@ -175,7 +144,7 @@ impl Command {
                 command.run()?;
             }
             Self::Show(show) => show.run()?,
-            Self::DumpUsage => dump_full_usage_for_readme()?,
+            Self::DumpUsage => dump_usage::dump_full_usage_for_readme()?,
         }
 
         Ok(())
@@ -190,35 +159,4 @@ pub struct Cli {
     /// The command to run.
     #[clap(subcommand)]
     pub command: Command,
-}
-
-/// The central cache directory of cargo gpu
-///
-/// # Errors
-/// may fail if we can't find the user home directory
-#[inline]
-#[cfg(not(test))]
-#[expect(clippy::cfg_not_test, reason = "tests use different cache_dir")]
-pub fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
-    use anyhow::Context as _;
-    Ok(directories::BaseDirs::new()
-        .with_context(|| "could not find the user home directory")?
-        .cache_dir()
-        .join("rust-gpu"))
-}
-
-#[cfg(test)]
-pub use test::test_cache_dir as cache_dir;
-
-/// Returns a string suitable to use as a directory.
-///
-/// Created from the spirv-builder source dep and the rustc channel.
-fn to_dirname(text: &str) -> String {
-    text.replace(
-        [std::path::MAIN_SEPARATOR, '\\', '/', '.', ':', '@', '='],
-        "_",
-    )
-    .split(['{', '}', ' ', '\n', '"', '\''])
-    .collect::<Vec<_>>()
-    .concat()
 }
