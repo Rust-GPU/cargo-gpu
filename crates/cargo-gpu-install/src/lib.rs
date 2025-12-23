@@ -50,7 +50,7 @@ macro_rules! user_output {
 /// # Errors
 /// may fail if we can't find the user home directory
 #[inline]
-#[cfg(not(test))]
+#[cfg(not(any(feature = "test", test)))]
 #[expect(clippy::cfg_not_test, reason = "tests use different cache_dir")]
 pub fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
     use anyhow::Context as _;
@@ -60,7 +60,7 @@ pub fn cache_dir() -> anyhow::Result<std::path::PathBuf> {
         .join("rust-gpu"))
 }
 
-#[cfg(test)]
+#[cfg(any(feature = "test", test))]
 pub use test::test_cache_dir as cache_dir;
 
 /// Returns a string suitable to use as a directory.
