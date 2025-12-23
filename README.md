@@ -49,7 +49,7 @@ let mut builder = backend.to_spirv_builder(shader_crate, "spirv-unknown-vulkan1.
 let spv_result = builder.build()?;
 ```
 
-For more detail, see the [readme of `cargo-gpu-install`](crates/cargo-gpu-install/README.md) or use any of our [templates](https://github.com/Rust-GPU/rust-gpu-template) as reference and choosing the `cargo-gpu-install` integration.
+For more detail, see the [readme of `cargo-gpu-install`](crates/cargo-gpu-install/README.md) or use any of our [templates](https://github.com/Rust-GPU/rust-gpu-template) as reference and choosing the `cargo-gpu` integration.
 
 ## How it works
 
