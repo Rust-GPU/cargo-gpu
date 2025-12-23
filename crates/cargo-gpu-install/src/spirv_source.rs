@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 ///     - a repo of "https://github.com/Rust-GPU/rust-gpu.git"
 ///     - a revision of "abc213"
 ///   * a local Path
+#[non_exhaustive]
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum SpirvSource {
     /// If the shader specifies a simple version like `spirv-std = "0.9.0"` then the source of
@@ -69,6 +70,9 @@ impl core::fmt::Display for SpirvSource {
 
 impl SpirvSource {
     /// Figures out which source of `rust-gpu` to use
+    ///
+    /// # Errors
+    /// Crate may not depend on `spirv-std` or is otherwise malformed
     pub fn new(
         shader_crate_path: &Path,
         maybe_rust_gpu_source: Option<&str>,
@@ -95,6 +99,9 @@ impl SpirvSource {
     }
 
     /// Look into the shader crate to get the version of `rust-gpu` it's using.
+    ///
+    /// # Errors
+    /// Crate may not depend on `spirv-std` or is otherwise malformed
     pub fn get_rust_gpu_deps_from_shader(shader_crate_path: &Path) -> anyhow::Result<Self> {
         let crate_metadata = query_metadata(shader_crate_path)?;
         let spirv_std_package = crate_metadata.find_package("spirv-std")?;
@@ -110,6 +117,9 @@ impl SpirvSource {
     /// Convert the `SpirvSource` to a cache directory in which we can build it.
     /// It needs to be dynamically created because an end-user might want to swap out the source,
     /// maybe using their own fork for example.
+    ///
+    /// # Errors
+    /// [`crate::cache_dir`] may fail
     pub fn install_dir(&self) -> anyhow::Result<PathBuf> {
         match self {
             Self::Path {
@@ -123,6 +133,7 @@ impl SpirvSource {
     }
 
     /// Returns true if self is a Path
+    #[must_use]
     pub const fn is_path(&self) -> bool {
         matches!(self, Self::Path { .. })
     }
@@ -182,6 +193,9 @@ impl SpirvSource {
 }
 
 /// get the Package metadata from some crate
+///
+/// # Errors
+/// metadata query may fail
 pub fn query_metadata(crate_path: &Path) -> anyhow::Result<Metadata> {
     log::debug!("Running `cargo metadata` on `{}`", crate_path.display());
     let metadata = MetadataCommand::new()
@@ -197,6 +211,9 @@ pub fn query_metadata(crate_path: &Path) -> anyhow::Result<Metadata> {
 /// implements [`Self::find_package`]
 pub trait FindPackage {
     /// Search for a package or return a nice error
+    ///
+    /// # Errors
+    /// package may not be found or crate may be malformed
     fn find_package(&self, crate_name: &str) -> anyhow::Result<&Package>;
 }
 
@@ -219,6 +236,9 @@ impl FindPackage for Metadata {
 }
 
 /// Parse the `rust-toolchain.toml` in the working tree of the checked-out version of the `rust-gpu` repo.
+///
+/// # Errors
+/// parsing may fail
 pub fn get_channel_from_rustc_codegen_spirv_build_script(
     rustc_codegen_spirv_package: &Package,
 ) -> anyhow::Result<String> {
