@@ -1,39 +1,54 @@
 # cargo-gpu
 
-Command line tool for building Rust shaders using rust-gpu.
+`cargo-gpu` is an installation manager and command line tool for [rust-gpu](https://github.com/Rust-GPU/rust-gpu/). `cargo-gpu` is not an essential requirement, it should just make working with `rust-gpu` easier.
 
-## Getting Started
+There are 2 ways to use it:
+1. Through a CLI, ie `cargo gpu ...`
+2. As a crate included in your build scripts or executables
 
-### Installation
+## 1. CLI Quickstart
 
-To install the tool ensure you have `rustup`. Then run:
+To install the command line tool, ensure you are using `rustup`. Then run:
 
 ```
 cargo install --git https://github.com/rust-gpu/cargo-gpu cargo-gpu
 ```
 
-After that you can use `cargo gpu` to compile your shader crates with:
+You can then use `cargo gpu` to compile your shader crates or use any of the other commands you're used to:
 
 ```
 cargo gpu build
+cargo gpu check
+cargo gpu clippy
 ```
 
-This plain invocation will compile the crate in the current directory and
-place the compiled shaders in the current directory.
+### Example project
 
-Use `cargo gpu help` to see other options :)
-
-### Next Steps
-
-You can try this out using the example repo at <https://github.com/rust-GPU/cargo-gpu/crates/shader-crate-template>.
-Keep in mind <https://github.com/rust-GPU/cargo-gpu/crates/shader-crate-template> is _not_ yet a cargo generate template,
-it's just a normal repo.
-
+To create an example project from our [templates](https://github.com/Rust-GPU/rust-gpu-template), use the command below:
 ```
-git clone https://github.com/rust-GPU/cargo-gpu
-cd cargo-gpu/crates/shader-crate-template
-cargo gpu build
+cargo gpu new
+# choose any template you want, then select cargo-gpu cmdline integration
+# you may have to adjust the crate name
+cargo gpu build -p mygraphics-shaders
 ```
+
+This plain invocation will compile the crate in the current directory and place the compiled shaders in the current directory.
+
+Use `cargo gpu help` to see more options :)
+
+## 2. Crate Quickstart
+
+Add `cargo-gpu-install` as a regular or build dependency to your project, and use it like this:
+
+```rust,no_run
+let shader_crate = PathBuf::from("./shaders");
+let backend = cargo_gpu_install::Install::from_shader_crate(shader_crate.clone()).run()?;
+let mut builder = backend.to_spirv_builder(shader_crate, "spirv-unknown-vulkan1.2");
+// configure the builder...
+let spv_result = builder.build()?;
+```
+
+For more detail, see the [readme of `cargo-gpu-install`](crates/cargo-gpu-install/README.md) or use any of our [templates](https://github.com/Rust-GPU/rust-gpu-template) as reference and choosing the `cargo-gpu-install` integration.
 
 ## How it works
 
@@ -52,7 +67,7 @@ the usage instructions the backend and nightly Rust version are referred to as "
 > workspace might use a newer `Cargo.lock` layout not supported by the pinned version of the shader crate's custom codegen backend. The solution to
 > this is to either exclude the shader from the workspace, or upgrade the shader's `spirv-std` dependency to the latest.
 
-## Usage
+## CLI Usage
 
 All the following arguments for the `build` and `install` commands can also be set in the shader crate's `Cargo.toml`
 file. In general usage that would be the recommended way to set config. See `crates/shader-crate-template/Cargo.toml`
