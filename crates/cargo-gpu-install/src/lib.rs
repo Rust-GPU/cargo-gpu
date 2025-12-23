@@ -15,6 +15,7 @@ pub use spirv_builder;
 
 /// Central function to write to the user.
 #[macro_export]
+#[cfg(feature = "tty")]
 macro_rules! user_output {
     ($($args: tt)*) => { {
         #[allow(
@@ -35,6 +36,13 @@ macro_rules! user_output {
         print!($($args)*);
         std::io::stdout().flush().unwrap();
    } }
+}
+
+/// Central function to write to the user.
+#[macro_export]
+#[cfg(not(feature = "tty"))]
+macro_rules! user_output {
+    ($($args: tt)*) => {{}};
 }
 
 /// The central cache directory of cargo gpu

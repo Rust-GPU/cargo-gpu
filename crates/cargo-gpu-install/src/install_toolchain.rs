@@ -1,6 +1,7 @@
 //! toolchain installation logic
 
 use anyhow::Context as _;
+#[cfg(feature = "tty")]
 use crossterm::tty::IsTty as _;
 
 use crate::user_output;
@@ -98,6 +99,20 @@ pub fn ensure_toolchain_and_components_exist(
     Ok(())
 }
 
+#[cfg(not(feature = "tty"))]
+/// Prompt user if they want to install a new Rust toolchain.
+fn get_consent_for_toolchain_install(
+    _prompt: &str,
+    skip_toolchain_install_consent: bool,
+) -> anyhow::Result<()> {
+    if skip_toolchain_install_consent {
+        Ok(())
+    } else {
+        no_tty()
+    }
+}
+
+#[cfg(feature = "tty")]
 /// Prompt user if they want to install a new Rust toolchain.
 fn get_consent_for_toolchain_install(
     prompt: &str,
@@ -108,10 +123,7 @@ fn get_consent_for_toolchain_install(
     }
 
     if !std::io::stdout().is_tty() {
-        user_output!("No TTY detected so can't ask for consent to install Rust toolchain.");
-        log::error!("Attempted to ask for consent when there's no TTY");
-        #[expect(clippy::exit, reason = "can't ask for user consent if there's no TTY")]
-        std::process::exit(1);
+        no_tty()
     }
 
     log::debug!("asking for consent to install the required toolchain");
@@ -142,4 +154,11 @@ fn get_consent_for_toolchain_install(
         #[expect(clippy::exit, reason = "user requested abort")]
         std::process::exit(0);
     }
+}
+
+fn no_tty() -> ! {
+    user_output!("No TTY detected so can't ask for consent to install Rust toolchain.");
+    log::error!("Attempted to ask for consent when there's no TTY");
+    #[expect(clippy::exit, reason = "can't ask for user consent if there's no TTY")]
+    std::process::exit(1);
 }
