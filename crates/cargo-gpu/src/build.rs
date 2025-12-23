@@ -5,8 +5,8 @@
 use crate::install::Install;
 use crate::linkage::Linkage;
 use crate::lockfile::LockfileMismatchHandler;
+use crate::spirv_builder::{CompileResult, ModuleResult, SpirvBuilder, SpirvBuilderError};
 use anyhow::Context as _;
-use spirv_builder::{CompileResult, ModuleResult, SpirvBuilder, SpirvBuilderError};
 use std::io::Write as _;
 use std::path::PathBuf;
 
