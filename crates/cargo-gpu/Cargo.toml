@@ -16,22 +16,18 @@ anyhow.workspace = true
 spirv-builder = { workspace = true, features = ["clap", "watch"] }
 cargo-gpu-install.workspace = true
 clap.workspace = true
-directories.workspace = true
 env_logger.workspace = true
 log.workspace = true
 relative-path.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-crossterm.workspace = true
 semver.workspace = true
 dunce.workspace = true
 
 [dev-dependencies]
 cargo-gpu-install = { workspace = true, features = ["test"] }
-tempfile.workspace = true
 test-log.workspace = true
 cargo_metadata = { workspace = true, features = ["builder"] }
-cargo-util-schemas = "0.8.2"
 
 [lints]
 workspace = true
