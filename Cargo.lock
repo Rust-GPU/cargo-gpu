@@ -112,7 +112,6 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "spirv-builder",
  "test-log",
 ]
 

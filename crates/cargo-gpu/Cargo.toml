@@ -13,7 +13,6 @@ default-run = "cargo-gpu"
 [dependencies]
 cargo_metadata.workspace = true
 anyhow.workspace = true
-spirv-builder = { workspace = true, features = ["clap", "watch"] }
 cargo-gpu-install = { workspace = true, features = ["clap", "watch", "tty"] }
 clap.workspace = true
 env_logger.workspace = true

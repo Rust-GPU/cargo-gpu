@@ -2,9 +2,9 @@
 //! v0.9.0 uses an old toolchain requiring v3 and will refuse to build with a v4 lockfile being
 //! present. This module takes care of warning the user and potentially downgrading the lockfile.
 
+use crate::spirv_builder::query_rustc_version;
 use anyhow::Context as _;
 use semver::Version;
-use spirv_builder::query_rustc_version;
 use std::io::Write as _;
 
 /// `Cargo.lock` manifest version 4 became the default in Rust 1.83.0. Conflicting manifest

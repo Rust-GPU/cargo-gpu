@@ -1,6 +1,7 @@
 //! Display various information about `cargo gpu`, eg its cache directory.
 
 use crate::cache_dir;
+use crate::spirv_builder::Capability;
 use crate::spirv_source::SpirvSource;
 
 /// Show the computed source of the spirv-std dependency.
@@ -69,11 +70,11 @@ impl Show {
     }
 
     /// Iterator over all `Capability` variants.
-    fn capability_variants_iter() -> impl Iterator<Item = spirv_builder::Capability> {
+    fn capability_variants_iter() -> impl Iterator<Item = Capability> {
         // Since spirv::Capability is repr(u32) we can iterate over
         // u32s until some maximum
         #[expect(clippy::as_conversions, reason = "We know all variants are repr(u32)")]
-        let last_capability = spirv_builder::Capability::CacheControlsINTEL as u32;
-        (0..=last_capability).filter_map(spirv_builder::Capability::from_u32)
+        let last_capability = Capability::CacheControlsINTEL as u32;
+        (0..=last_capability).filter_map(Capability::from_u32)
     }
 }

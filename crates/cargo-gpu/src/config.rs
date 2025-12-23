@@ -91,6 +91,7 @@ impl Config {
 mod test {
     use super::*;
 
+    use crate::spirv_builder::Capability;
     use crate::test::TestEnv;
     use std::io::Write as _;
 
@@ -225,10 +226,7 @@ mod test {
         .unwrap();
         assert_eq!(
             args.build.spirv_builder.capabilities,
-            vec![
-                spirv_builder::Capability::AtomicStorage,
-                spirv_builder::Capability::Matrix
-            ]
+            vec![Capability::AtomicStorage, Capability::Matrix]
         );
     }
 
