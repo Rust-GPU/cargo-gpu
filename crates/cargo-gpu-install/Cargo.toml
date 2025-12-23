@@ -9,13 +9,15 @@ keywords.workspace = true
 license.workspace = true
 
 [features]
+clap = ["dep:clap", "spirv-builder/clap"]
+watch = ["spirv-builder/watch"]
 test = ["dep:tempfile"]
 
 [dependencies]
 cargo_metadata.workspace = true
 anyhow.workspace = true
-spirv-builder = { workspace = true, features = ["clap", "watch"] }
-clap.workspace = true
+spirv-builder.workspace = true
+clap = { workspace = true, optional = true }
 directories.workspace = true
 log.workspace = true
 serde.workspace = true
