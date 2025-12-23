@@ -26,7 +26,8 @@ cargo gpu clippy
 
 To create an example project from our [templates](https://github.com/Rust-GPU/rust-gpu-template), use the command below:
 ```
-cargo gpu new
+cargo install cargo-generate
+cargo generate --git https://github.com/Rust-GPU/rust-gpu-template
 # choose any template you want, then select cargo-gpu cmdline integration
 # you may have to adjust the crate name
 cargo gpu build -p mygraphics-shaders
