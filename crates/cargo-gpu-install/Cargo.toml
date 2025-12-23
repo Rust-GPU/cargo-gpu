@@ -12,6 +12,7 @@ license.workspace = true
 clap = ["dep:clap", "spirv-builder/clap"]
 watch = ["spirv-builder/watch"]
 test = ["dep:tempfile"]
+tty = ["dep:crossterm"]
 
 [dependencies]
 cargo_metadata.workspace = true
@@ -21,7 +22,7 @@ clap = { workspace = true, optional = true }
 directories.workspace = true
 log.workspace = true
 serde.workspace = true
-crossterm.workspace = true
+crossterm = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]

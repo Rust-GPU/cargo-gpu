@@ -28,7 +28,7 @@ spirv-builder = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "a30bd43db
 cargo-gpu-install = { path = "./crates/cargo-gpu-install" }
 anyhow = "1.0.98"
 clap = { version = "4.5.41", features = ["derive"] }
-crossterm = "0.29.0"
+crossterm = { version = "0.29.0", default-features = false, features = ["events", "windows"] }
 directories = "6.0.0"
 env_logger = "0.11.8"
 log = "0.4"
