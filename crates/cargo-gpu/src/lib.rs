@@ -104,6 +104,9 @@ pub enum Command {
     /// Compile a shader crate to SPIR-V.
     Build(Box<Build>),
 
+    /// Run `cargo check` on the shader crate with a SPIR-V target without building the actual shaders
+    Check(Box<Build>),
+
     /// Run clippy on a shader crate with a SPIR-V target
     Clippy(Box<Build>),
 
@@ -142,16 +145,24 @@ impl Command {
                 );
                 command.install.run()?;
             }
-            Self::Build(build) | Self::Clippy(build) => {
+            Self::Build(build) | Self::Check(build) | Self::Clippy(build) => {
                 let shader_crate_path = &build.install.shader_crate;
                 let mut command = config::Config::clap_command_with_cargo_config(
                     shader_crate_path,
                     env_args,
                     metadata_cache,
                 )?;
-                if let Self::Clippy(_) = self {
-                    command.build.spirv_builder.cargo_cmd = Some("clippy".into());
-                    command.build.allow_no_artifacts = true;
+                #[expect(clippy::wildcard_enum_match_arm, reason = "unreachable")]
+                match self {
+                    Self::Check(_) => {
+                        command.build.spirv_builder.cargo_cmd = Some("check".into());
+                        command.build.allow_no_artifacts = true;
+                    }
+                    Self::Clippy(_) => {
+                        command.build.spirv_builder.cargo_cmd = Some("clippy".into());
+                        command.build.allow_no_artifacts = true;
+                    }
+                    _ => {}
                 }
                 log::debug!("building with final merged arguments: {command:#?}");
 
