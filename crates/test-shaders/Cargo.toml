@@ -1,0 +1,11 @@
+[package]
+name = "test-shaders"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "de03e8d8c997c68aed1a950863c0d79ba9bd8c72" }
+

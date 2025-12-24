@@ -126,6 +126,7 @@ impl Build {
     fn parse_compilation_result(&self, result: &CompileResult) -> anyhow::Result<()> {
         let shaders = match &result.module {
             ModuleResult::MultiModule(modules) => {
+                log::debug!("modules: {modules:#?}");
                 anyhow::ensure!(!modules.is_empty(), "No shader modules were compiled");
                 modules.iter().collect::<Vec<_>>()
             }
@@ -138,6 +139,7 @@ impl Build {
         let mut linkage: Vec<Linkage> = shaders
             .into_iter()
             .map(|(entry, filepath)| -> anyhow::Result<Linkage> {
+                log::debug!("Compiled {entry} to {filepath:?}");
                 use relative_path::PathExt as _;
                 let path = self.build.output_dir.join(
                     filepath
